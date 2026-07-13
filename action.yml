@@ -1,0 +1,19 @@
+name: 'agents-md-facts check'
+description: "Fail the build if AGENTS.md is missing or stale versus the repo's facts."
+author: 'James Wolfe (@Wolfe-Jam)'
+branding:
+  icon: 'check-circle'
+  color: 'green'
+
+inputs:
+  version:
+    description: 'The npm version or dist-tag of agents-md-facts to run.'
+    required: false
+    default: 'latest'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Keep AGENTS.md true
+      shell: bash
+      run: npx --yes agents-md-facts@${{ inputs.version }} --check

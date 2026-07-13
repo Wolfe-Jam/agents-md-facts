@@ -1,0 +1,17 @@
+{
+  "name": "node-ts-example",
+  "version": "1.0.0",
+  "description": "A tiny TypeScript + Node fixture for agents-md-facts.",
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "test": "node --test",
+    "dev": "node --watch src/index.ts",
+    "lint": "eslint ."
+  },
+  "devDependencies": {
+    "eslint": "^9.0.0",
+    "prettier": "^3.0.0",
+    "typescript": "^5.6.0"
+  }
+}

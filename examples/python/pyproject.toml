@@ -1,0 +1,14 @@
+[project]
+name = "python-example"
+version = "0.1.0"
+description = "A tiny Python fixture for agents-md-facts."
+requires-python = ">=3.10"
+
+[tool.black]
+line-length = 88
+
+[tool.ruff]
+line-length = 88
+
+[tool.mypy]
+strict = true

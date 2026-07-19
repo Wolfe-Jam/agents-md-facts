@@ -7,6 +7,18 @@ to [Semantic Versioning](https://semver.org/).
 
 Honest to a fault — a minimal AGENTS.md, authored from your repo's facts, never guessed.
 
+Initial public release.
+
+### Authored AGENTS.md (facts polish)
+
+- Orientation includes package **version** when declared (`v0.1.0`).
+- **Run the tests** includes lint/typecheck scripts when present (verify bar).
+- Detect `typecheck` package.json script.
+- Richer **where things live** (common `src/` layout dirs, `tests/`, `examples/`).
+- Commit & PR: same-PR refresh reminder when scripts/layout change.
+
+### Added
+
 Initial release.
 
 ### Added

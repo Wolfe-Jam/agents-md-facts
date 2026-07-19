@@ -55,7 +55,7 @@ describe('key-files', () => {
     expect(detectKeyFiles(nodeTs)).toEqual(['package.json', 'src/index.ts', 'tsconfig.json']);
   });
   test('python', () => {
-    expect(detectKeyFiles(python)).toEqual(['pyproject.toml', 'main.py']);
+    expect(detectKeyFiles(python)).toEqual(['pyproject.toml', 'main.py', 'tests/']);
   });
   test('rust', () => {
     expect(detectKeyFiles(rust)).toEqual(['Cargo.toml', 'src/main.rs']);

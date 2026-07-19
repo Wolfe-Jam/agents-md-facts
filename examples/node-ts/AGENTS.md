@@ -3,7 +3,7 @@
 
 # AGENTS.md — node-ts-example
 
-TypeScript · Node.js · npm package manager
+TypeScript · Node.js · npm package manager · v1.0.0
 
 ## Setup & build
 
@@ -17,6 +17,7 @@ npm run dev    # dev
 
 ```bash
 npm run test
+npm run lint
 ```
 
 ## Where things live

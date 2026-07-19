@@ -14,7 +14,8 @@ export function detectCommands(dir: string, pkg: PackageJson | null): Record<str
 
   // From package.json scripts (most reliable)
   if (pkg?.scripts) {
-    for (const key of ['build', 'test', 'lint', 'dev', 'start']) {
+    // Prefer exact script names that agents run to verify work (incl. typecheck).
+    for (const key of ['build', 'test', 'lint', 'typecheck', 'dev', 'start']) {
       if (pkg.scripts[key]) {
         // Determine the runner — prefer bun if a bun lockfile is present, else npm
         const runner = existsSync(join(dir, 'bun.lock')) || existsSync(join(dir, 'bun.lockb'))

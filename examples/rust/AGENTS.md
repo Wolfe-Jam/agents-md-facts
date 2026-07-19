@@ -15,6 +15,7 @@ cargo build --release    # build
 
 ```bash
 cargo test
+cargo clippy
 ```
 
 ## Where things live

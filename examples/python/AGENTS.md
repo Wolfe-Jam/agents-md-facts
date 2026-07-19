@@ -15,6 +15,7 @@ pytest
 
 - `pyproject.toml`
 - `main.py`
+- `tests/`
 
 ## Conventions
 

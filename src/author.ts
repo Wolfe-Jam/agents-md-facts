@@ -19,13 +19,14 @@ function installCommand(ctx: RepoContext): string | null {
   }
 }
 
-/** One-line orientation from detected language / kind / runtime / package manager. */
+/** One-line orientation from detected language / kind / runtime / package manager / version. */
 function orientationLine(ctx: RepoContext): string {
   const parts: string[] = [];
   if (ctx.language !== 'Unknown') parts.push(ctx.language);
   if (ctx.kind) parts.push(ctx.kind);
   if (ctx.runtime !== 'Unknown' && ctx.runtime !== ctx.language) parts.push(ctx.runtime);
   if (ctx.hasNodeManifest) parts.push(`${ctx.packageManager} package manager`);
+  if (ctx.version) parts.push(`v${ctx.version}`);
   return parts.join(' · ');
 }
 
@@ -44,10 +45,13 @@ export function authorAgentsMd(ctx: RepoContext): string {
   // Classify detected commands (a key is counted once, in this order).
   const entries = Object.entries(ctx.commands).filter(([, v]) => v && v.trim());
   const testCmds = entries.filter(([k]) => /test/i.test(k));
+  // lint + typecheck (+ other *check*) — verify bar, not setup
   const lintCmds = entries.filter(([k]) => /lint|check/i.test(k) && !/test/i.test(k));
   const setupCmds = entries.filter(([k]) => !/test|lint|check/i.test(k));
   const testCmd = testCmds[0]?.[1];
   const buildCmd = setupCmds.find(([k]) => k === 'build')?.[1];
+  // Full verify list for "Run the tests" (tests first, then lint/typecheck)
+  const verifyCmds = [...testCmds, ...lintCmds];
 
   // ── Header + orientation ────────────────────────────────────────────────
   push(BANNER);
@@ -74,12 +78,12 @@ export function authorAgentsMd(ctx: RepoContext): string {
     push();
   }
 
-  // §3 Run the tests
-  if (testCmds.length) {
+  // §3 Run the tests — verify bar: tests + lint/typecheck when detected
+  if (verifyCmds.length) {
     push('## Run the tests');
     push();
     push('```bash');
-    for (const [, v] of testCmds) push(v);
+    for (const [, v] of verifyCmds) push(v);
     push('```');
     push();
   }
@@ -140,6 +144,7 @@ export function authorAgentsMd(ctx: RepoContext): string {
     push();
     push('- Write a clear, descriptive commit message.');
     push('- Branch off `main`; never commit to `main` directly — open a PR for review.');
+    push('- If build/test scripts or layout change, refresh this file in the **same PR** (`npx agents-md-facts`).');
     push();
   }
 

@@ -13,6 +13,9 @@ export function detectKeyFiles(dir: string): string[] {
     'build.zig', 'build.zig.zon',
     // Entry points (TS/JS)
     'src/index.ts', 'src/index.js', 'src/main.ts', 'src/cli.ts',
+    // Common src layout (dirs — agents need the map, not only entry files)
+    'src/detect/', 'src/commands/', 'src/core/', 'src/interop/',
+    'src/author.ts', 'src/context.ts', 'src/inject.ts',
     // Entry points (Rust)
     'src/main.rs', 'src/lib.rs',
     // Entry points (Zig)
@@ -21,10 +24,15 @@ export function detectKeyFiles(dir: string): string[] {
     'src/__init__.py', 'main.py', '__main__.py',
     // Entry points (Go)
     'main.go', 'cmd/main.go',
-    // Specs / docs
-    'README.md', 'SPECIFICATION.md',
+    // Tests / fixtures
+    'tests/', 'test/', 'examples/',
+    // Specs / docs (do not list AGENTS.md — circular: this file is the output)
+    'README.md', 'SPECIFICATION.md', 'CHANGELOG.md',
     // Config
-    'tsconfig.json', 'wrangler.toml', 'vercel.json',
+    'tsconfig.json', 'eslint.config.js', 'wrangler.toml', 'vercel.json',
   ];
-  return candidates.filter(f => existsSync(join(dir, f)));
+  return candidates.filter((f) => {
+    const p = join(dir, f.replace(/\/$/, ''));
+    return existsSync(p);
+  });
 }

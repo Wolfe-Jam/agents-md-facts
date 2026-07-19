@@ -17,6 +17,8 @@ export interface RepoContext {
   dir: string;
   /** package.json name, else the directory basename. */
   name: string;
+  /** package.json / Cargo-style version when declared, else null. */
+  version: string | null;
   /** Primary language (TypeScript, Rust, Go, …) or "Unknown". */
   language: string;
   /** Runtime (Node.js, Bun, Deno, Rust, …) or "Unknown". */
@@ -49,6 +51,7 @@ export function buildRepoContext(dir: string): RepoContext {
   return {
     dir,
     name: pkg?.name ?? basename(dir),
+    version: typeof pkg?.version === 'string' && pkg.version.trim() ? pkg.version.trim() : null,
     language: detectLanguage(dir),
     runtime: detectRuntime(dir),
     packageManager: detectPackageManager(dir),

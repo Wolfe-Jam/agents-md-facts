@@ -49,6 +49,10 @@ Prefer a raw step? `run: npx agents-md-facts --check` does the same thing. Eithe
 
 The whole point: this tool **doesn't invent** an AGENTS.md — it **authors** one from what's *true* in your repo. That's the exact difference the research measured: minimal-from-facts *helps*; LLM-freewritten *hurts*. Author clean, and there's no bloat for a linter to catch later.
 
+## Ladder (NONE → BEST)
+
+This repo ships as **BETTER** on `main`. See **[docs/BETTER-BEST.md](docs/BETTER-BEST.md)** for the short ladder model and how to verify refs.
+
 ## License
 
 MIT © James Wolfe · Built on the open [AGENTS.md](https://agents.md) standard.

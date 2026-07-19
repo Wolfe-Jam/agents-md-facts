@@ -23,5 +23,11 @@ jobs:
       - name: Typecheck
         run: bunx tsc --noEmit
 
+      - name: Lint
+        run: bun run lint
+
       - name: Test
         run: bun test
+
+      - name: AGENTS.md still matches facts
+        run: bun run src/cli.ts --check

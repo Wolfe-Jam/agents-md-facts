@@ -1,0 +1,89 @@
+# BEST print slice — project DNA for agents-md-facts
+# BETTER = main/v0.1.0 (no project.faf). This file is the BEST layer only.
+faf_version: "3.0"
+project:
+  name: agents-md-facts
+  goal: >-
+    Honest to a fault — a minimal AGENTS.md, authored from your repo's facts,
+    never guessed. CLI + library for coding agents and humans.
+  main_language: TypeScript
+  type: cli  # Node/bun CLI + library (not a web app; not docs-only)
+
+stack:
+  frontend: slotignored
+  css_framework: slotignored
+  ui_library: slotignored
+  state_management: slotignored
+  backend: slotignored
+  api_type: slotignored
+  runtime: Node.js
+  database: slotignored
+  connection: slotignored
+  hosting: npm
+  build: TypeScript (tsc)
+  cicd: GitHub Actions
+  monorepo_tool: slotignored
+  package_manager: bun
+  workspaces: slotignored
+  admin: slotignored
+  cache: slotignored
+  search: slotignored
+  storage: slotignored
+
+human_context:
+  who: >-
+    Developers and coding-agent users who want a short AGENTS.md that stays true
+    to the tree — and maintainers teaching NONE→GOOD→BETTER→BEST.
+  what: >-
+    CLI that authors a minimal AGENTS.md from detected facts only (setup, tests,
+    layout, guardrails). Never invents. Refresh via markers; --check for CI.
+  why: >-
+    Hand-written AGENTS.md rots; LLM-written ones often bloat and can reduce task
+    success. Facts-authored instruction is the BETTER baseline; project.faf is
+    optional BEST DNA on the same real product repo.
+  where: >-
+    https://github.com/Wolfe-Jam/agents-md-facts · npm package agents-md-facts ·
+    public OSS (MIT)
+  when: >-
+    Ongoing maintenance; BETTER product on main/v0.1.0; BEST print slice on
+    better-best/* tags for falsifiable diffs (not the default product path)
+  how: >-
+    bun install · bun run build · bun run test · npx agents-md-facts ·
+    npx agents-md-facts --check
+
+monorepo:
+  packages_count: slotignored
+  build_orchestrator: slotignored
+  versioning_strategy: slotignored
+  shared_configs: slotignored
+  remote_cache: slotignored
+
+tech_stack:
+  - TypeScript
+  - Node.js
+  - bun
+  - ESLint
+
+key_files:
+  - package.json
+  - src/index.ts
+  - src/cli.ts
+  - src/author.ts
+  - src/detect/
+  - tests/
+  - examples/
+  - AGENTS.md
+  - README.md
+  - docs/BETTER-BEST.md
+  - action.yml
+  - tsconfig.json
+  - eslint.config.js
+
+commands:
+  build: bun run build
+  test: bun run test
+  lint: bun run lint
+  typecheck: bun run typecheck
+  dev: bun run dev
+  agents: npx agents-md-facts
+  agents_check: npx agents-md-facts --check

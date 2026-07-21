@@ -21,8 +21,8 @@ This repository is intentionally a **real open-source tool**, not a toy fixture.
 
 | State | Where |
 |-------|--------|
-| **BETTER** | **`main`** and release tags (e.g. `v0.1.0`) |
-| **BEST** | A **branch and/or tag for print** when we add `project.faf` — same software, falsifiable git diff |
+| **BETTER** | **`main`** and release tags (e.g. `v0.1.0`) — no `project.faf` |
+| **BEST** | Branch/tag **`better-best/2026-07-21`** — same product software **plus** `project.faf` (falsifiable git diff) |
 
 **Product default = BETTER.** You do not need FAF (or any other stack) to install or run `agents-md-facts`.
 
@@ -48,14 +48,19 @@ test ! -f project.faf   # product BETTER does not require project DNA
 npx agents-md-facts --check
 ```
 
-**BEST print slice (when a tag exists):**
+**BEST print slice (`better-best/2026-07-21`):**
 
 ```bash
-git diff v0.1.0..<best-tag> --stat
-git diff v0.1.0..<best-tag> -- project.faf AGENTS.md
+git fetch origin
+git diff v0.1.0..better-best/2026-07-21 --stat
+git diff v0.1.0..better-best/2026-07-21 -- project.faf docs/BETTER-BEST.md
+
+# Optional worktrees (side-by-side)
+# git worktree add ../agents-md-facts-better v0.1.0
+# git worktree add ../agents-md-facts-best   better-best/2026-07-21
 ```
 
-Or use GitHub’s compare view between the two refs.
+Or GitHub compare: `v0.1.0...better-best/2026-07-21`.
 
 ## Naming note
 

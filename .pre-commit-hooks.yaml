@@ -1,0 +1,7 @@
+- id: agents-md-facts
+  name: agents-md-facts
+  description: Keep AGENTS.md fresh (detect from repo facts)
+  entry: agents-md-facts --check
+  language: node
+  files: ^(package\.json|Cargo\.toml|pyproject\.toml|go\.mod|\.env\.example|tsconfig\.json|\.github/|test|src/)
+  stages: [commit]

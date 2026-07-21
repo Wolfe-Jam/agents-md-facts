@@ -44,6 +44,21 @@ Fail the build when `AGENTS.md` drifts from the repo:
 
 Or: `npx agents-md-facts --check`.
 
+## Pre-commit hook
+
+Catch stale `AGENTS.md` before it lands:
+
+```yaml
+# .pre-commit-config.yaml
+repos:
+  - repo: https://github.com/Wolfe-Jam/agents-md-facts
+    rev: v0.1.0
+    hooks:
+      - id: agents-md-facts
+```
+
+Then: `pre-commit install`.
+
 ## Ladder
 
 **BETTER on `main`.** Short model: [`docs/BETTER-BEST.md`](docs/BETTER-BEST.md).

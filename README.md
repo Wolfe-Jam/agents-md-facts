@@ -82,3 +82,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md). Security: [SECURITY.md](SECURITY.md).
 MIT © James Wolfe · Built on the open [AGENTS.md](https://agents.md) standard.
 
 Optional depth on facts-driven project DNA: [faf.one/agents](https://faf.one/agents)
+
+---
+
+⭐ **If this saved you a hand-written (or LLM-bloated) AGENTS.md, a star helps others find it.**

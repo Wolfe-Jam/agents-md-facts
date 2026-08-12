@@ -85,4 +85,4 @@ Optional depth on facts-driven project DNA: [faf.one/agents](https://faf.one/age
 
 ---
 
-⭐ **If this saved you a hand-written (or LLM-bloated) AGENTS.md, a star helps others find it.**
+⭐ Bookmarks it for you, helps other devs find it too.

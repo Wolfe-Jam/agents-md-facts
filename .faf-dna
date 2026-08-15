@@ -1,0 +1,41 @@
+{
+  "birthCertificate": {
+    "born": "2026-07-21T23:05:16.399Z",
+    "birthDNA": 67,
+    "birthDNASource": "init",
+    "projectDNA": "e4f9df75d1812d4e",
+    "certificate": "FAF-2026-AGENTSMD-0ZIV"
+  },
+  "versions": [
+    {
+      "version": "v1.0.0",
+      "timestamp": "2026-07-21T23:05:16.399Z",
+      "score": 67,
+      "changes": [
+        "Birth — initial context"
+      ],
+      "growth": 0
+    }
+  ],
+  "current": {
+    "version": "v1.0.0",
+    "score": 67,
+    "lastSync": "2026-07-21T23:05:16.399Z"
+  },
+  "growth": {
+    "totalGrowth": 0,
+    "daysActive": 0,
+    "milestones": [
+      {
+        "type": "birth",
+        "score": 67,
+        "date": "2026-07-21T23:05:16.399Z",
+        "version": "v1.0.0",
+        "label": "Birth",
+        "emoji": "🐣"
+      }
+    ]
+  },
+  "lastModified": "2026-07-21T23:05:16.401Z",
+  "format": "faf-dna-v1"
+}

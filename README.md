@@ -5,6 +5,7 @@
 [![CI](https://github.com/Wolfe-Jam/agents-md-facts/actions/workflows/ci.yml/badge.svg)](https://github.com/Wolfe-Jam/agents-md-facts/actions/workflows/ci.yml)
 [![npm](https://img.shields.io/npm/v/agents-md-facts?color=cb3837)](https://www.npmjs.com/package/agents-md-facts)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![DOI: Agents paper](https://img.shields.io/badge/DOI-Agents%20paper-FF6B35)](https://doi.org/10.5281/zenodo.21951641)
 
 Hand-written agent files **rot**. LLM-written ones often **bloat** and can *reduce* task success ([Gloaguen et al., 2026](https://arxiv.org/abs/2602.11988)). This tool **authors** only what the tree declares — real build/test commands, entry points, toolchain conventions. Nothing invented. Nothing padded.
 
@@ -76,6 +77,12 @@ bun run src/cli.ts          # refresh this repo’s AGENTS.md
 ```
 
 See [CONTRIBUTING.md](CONTRIBUTING.md). Security: [SECURITY.md](SECURITY.md).
+
+## Citation
+
+`AGENTS.md` is how to work in a repo. `.fafa` is who the agent is. Complementary, not competing.
+
+> Wolfe, J. (2026). *Why Agents Need a Passport: .fafa — Portable Identity for the Agentic Era*. Zenodo. https://doi.org/10.5281/zenodo.21951641
 
 ## License
 

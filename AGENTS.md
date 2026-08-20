@@ -1,9 +1,11 @@
 <!-- agents:from-facts:start -->
-<!-- authored by agents-md-facts — from your repo's facts, never guessed · re-run to refresh -->
+<!-- authored by agents-md-facts — from your repo's facts, never guessed · re-run to refresh · authored: 2026-08-20T03:12:49.318Z -->
 
 # AGENTS.md — agents-md-facts
 
 TypeScript · CLI · Node.js · bun package manager · v0.1.0
+
+*Authored: 2026-08-20*
 
 ## Setup & build
 

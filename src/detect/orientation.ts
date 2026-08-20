@@ -49,10 +49,15 @@ export function detectPackageManager(dir: string): string {
 
 /**
  * A lightweight repo "kind" for the orientation line, from cheap manifest
- * signals only (no framework registry). CLI when a bin is declared; library
+ * signals only (no framework registry). MCP server when the SDK is declared
+ * — checked before CLI, since an MCP server typically also ships a bin entry
+ * and would otherwise be misclassified. CLI when a bin is declared; library
  * when there's a main/exports entry but no bin. Null when neither applies.
  */
 export function detectKind(_dir: string, pkg: PackageJson | null): string | null {
+  if (pkg?.dependencies?.['@modelcontextprotocol/sdk'] || pkg?.devDependencies?.['@modelcontextprotocol/sdk']) {
+    return 'MCP server';
+  }
   if (pkg?.bin) return 'CLI';
   if (pkg && (pkg.main || pkg.exports) && !pkg.bin) return 'library';
   return null;

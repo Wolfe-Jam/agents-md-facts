@@ -122,6 +122,34 @@ describe('orientation', () => {
     expect(detectPackageManager(nodeTs)).toBe('npm');
     expect(detectKind(nodeTs, readPackageJson(nodeTs))).toBeNull();
   });
+  test('mcp server (bin + @modelcontextprotocol/sdk) → "MCP server", not "CLI"', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'amf-mcp-'));
+    try {
+      writeFileSync(
+        join(dir, 'package.json'),
+        JSON.stringify({
+          name: 'example-mcp',
+          bin: { 'example-mcp': 'bin/cli.js' },
+          dependencies: { '@modelcontextprotocol/sdk': '^1.0.0' },
+        }),
+      );
+      expect(detectKind(dir, readPackageJson(dir))).toBe('MCP server');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+  test('bin without the MCP SDK → still "CLI"', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'amf-cli-'));
+    try {
+      writeFileSync(
+        join(dir, 'package.json'),
+        JSON.stringify({ name: 'example-cli', bin: { 'example-cli': 'bin/cli.js' } }),
+      );
+      expect(detectKind(dir, readPackageJson(dir))).toBe('CLI');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
   test('python', () => {
     expect(detectLanguage(python)).toBe('Python');
     expect(detectRuntime(python)).toBe('Unknown');

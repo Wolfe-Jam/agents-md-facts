@@ -2,10 +2,18 @@ import type { RepoContext } from './context.js';
 
 /**
  * The banner written at the top of the managed block. It says what authored the
- * file and how it stays true — from facts, never guessed.
+ * file and how it stays true — from facts, never guessed. Carries the precise
+ * ISO authoring timestamp for `--check` (or any tool) to parse mechanically.
+ * Excluded from the `--check` equality diff — see `stripVolatile` in cli.ts.
  */
-const BANNER =
-  "<!-- authored by agents-md-facts — from your repo's facts, never guessed · re-run to refresh -->";
+function banner(now: Date): string {
+  return `<!-- authored by agents-md-facts — from your repo's facts, never guessed · re-run to refresh · authored: ${now.toISOString()} -->`;
+}
+
+/** Human-readable companion to the banner's ISO timestamp — visible while reading, not just parseable. */
+function authoredLine(now: Date): string {
+  return `*Authored: ${now.toISOString().slice(0, 10)}*`;
+}
 
 /** The explicit dependency-install command for a Node repo, from the detected package manager. */
 function installCommand(ctx: RepoContext): string | null {
@@ -38,7 +46,7 @@ function orientationLine(ctx: RepoContext): string {
  * exploration. The result is the managed block body (banner + sections); the
  * surrounding markers are added by the injector.
  */
-export function authorAgentsMd(ctx: RepoContext): string {
+export function authorAgentsMd(ctx: RepoContext, now: Date = new Date()): string {
   const lines: string[] = [];
   const push = (s = ''): void => { lines.push(s); };
 
@@ -54,7 +62,7 @@ export function authorAgentsMd(ctx: RepoContext): string {
   const verifyCmds = [...testCmds, ...lintCmds];
 
   // ── Header + orientation ────────────────────────────────────────────────
-  push(BANNER);
+  push(banner(now));
   push();
   push(`# AGENTS.md — ${ctx.name}`);
   push();
@@ -63,6 +71,8 @@ export function authorAgentsMd(ctx: RepoContext): string {
     push(orientation);
     push();
   }
+  push(authoredLine(now));
+  push();
 
   // §2 Setup & build
   const setupLines: string[] = [];

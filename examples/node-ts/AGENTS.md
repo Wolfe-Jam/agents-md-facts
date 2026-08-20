@@ -1,9 +1,11 @@
 <!-- agents:from-facts:start -->
-<!-- authored by agents-md-facts — from your repo's facts, never guessed · re-run to refresh -->
+<!-- authored by agents-md-facts — from your repo's facts, never guessed · re-run to refresh · authored: 2026-08-20T03:08:41.941Z -->
 
 # AGENTS.md — node-ts-example
 
 TypeScript · Node.js · npm package manager · v1.0.0
+
+*Authored: 2026-08-20*
 
 ## Setup & build
 

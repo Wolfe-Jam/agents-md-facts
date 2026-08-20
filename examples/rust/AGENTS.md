@@ -1,9 +1,11 @@
 <!-- agents:from-facts:start -->
-<!-- authored by agents-md-facts — from your repo's facts, never guessed · re-run to refresh -->
+<!-- authored by agents-md-facts — from your repo's facts, never guessed · re-run to refresh · authored: 2026-08-20T03:08:42.048Z -->
 
 # AGENTS.md — rust
 
 Rust
+
+*Authored: 2026-08-20*
 
 ## Setup & build
 

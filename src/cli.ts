@@ -3,6 +3,7 @@ import { join } from 'path';
 import { authorAgentsMd } from './author.js';
 import { buildRepoContext } from './context.js';
 import { extractBlock, injectBlock, wrapBlock } from './inject.js';
+import { stripVolatile } from './volatile.js';
 
 const HELP = `agents-md-facts — author a minimal AGENTS.md from your repo's facts.
 
@@ -36,7 +37,7 @@ function main(): void {
       process.stderr.write('AGENTS.md is missing or has no agents-md-facts block — run agents-md-facts to author it.\n');
       process.exit(1);
     }
-    if (current !== block.trim()) {
+    if (stripVolatile(current) !== stripVolatile(block.trim())) {
       process.stderr.write('AGENTS.md is stale — re-run agents-md-facts to refresh it from the repo.\n');
       process.exit(1);
     }

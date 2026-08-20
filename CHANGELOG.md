@@ -3,6 +3,10 @@
 All notable changes to this project are documented here. This project adheres
 to [Semantic Versioning](https://semver.org/).
 
+## Unreleased
+
+- Default author **skips the write** when facts are unchanged (timestamp ignored). A no-op re-run does not dirty git.
+
 ## 0.1.0
 
 Honest to a fault — a minimal AGENTS.md, authored from your repo's facts, never guessed.

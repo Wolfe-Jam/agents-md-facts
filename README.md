@@ -12,7 +12,7 @@ Hand-written agent files **rot**. LLM-written ones often **bloat** and can *redu
 ## Use
 
 ```bash
-npx agents-md-facts            # author/refresh AGENTS.md (non-destructive)
+npx agents-md-facts            # author/refresh AGENTS.md (non-destructive; skip write if facts unchanged)
 npx agents-md-facts --check    # exit 1 if missing or stale
 npx agents-md-facts --dry-run  # print plan; write nothing
 npx agents-md-facts --stdout   # emit managed block to stdout

@@ -70,6 +70,29 @@ describe('cli', () => {
     expect(existsSync(join(dir, 'AGENTS.md'))).toBe(false);
   });
 
+  test('default re-run skips the write when facts are unchanged', () => {
+    const first = runCli(dir);
+    expect(first.exitCode).toBe(0);
+    expect(first.stderr).toMatch(/authored from facts/);
+    const before = readFileSync(join(dir, 'AGENTS.md'), 'utf-8');
+    const second = runCli(dir);
+    expect(second.exitCode).toBe(0);
+    expect(second.stderr).toMatch(/write skipped/);
+    expect(readFileSync(join(dir, 'AGENTS.md'), 'utf-8')).toBe(before);
+  });
+
+  test('default re-run still writes when facts moved', () => {
+    runCli(dir);
+    const before = readFileSync(join(dir, 'AGENTS.md'), 'utf-8');
+    writeFileSync(join(dir, 'tsconfig.json'), JSON.stringify({ compilerOptions: { strict: true } }));
+    const r = runCli(dir);
+    expect(r.exitCode).toBe(0);
+    expect(r.stderr).toMatch(/authored from facts/);
+    const after = readFileSync(join(dir, 'AGENTS.md'), 'utf-8');
+    expect(after).not.toBe(before);
+    expect(after).toContain('TypeScript strict mode');
+  });
+
   test('default is non-destructive: hand-written content is preserved on re-run', () => {
     runCli(dir); // author
     const authored = readFileSync(join(dir, 'AGENTS.md'), 'utf-8');
@@ -90,8 +113,9 @@ describe('cli', () => {
 
   test('no user-facing output ever says "generate"', () => {
     const authored = runCli(dir);
+    const skipped = runCli(dir);
     const stdout = runCli(dir, '--stdout');
-    for (const r of [authored, stdout]) {
+    for (const r of [authored, skipped, stdout]) {
       expect(r.stdout).not.toMatch(/generat/i);
       expect(r.stderr).not.toMatch(/generat/i);
     }

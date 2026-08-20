@@ -53,6 +53,12 @@ function main(): void {
   }
 
   // default: author/refresh non-destructively.
+  // Skip the write when facts are unchanged — a new ISO stamp must not dirty git.
+  const current = extractBlock(target);
+  if (current !== null && stripVolatile(current) === stripVolatile(block.trim())) {
+    process.stderr.write('AGENTS.md already matches facts — write skipped.\n');
+    return;
+  }
   injectBlock(target, block);
   process.stderr.write(`AGENTS.md authored from facts → ${target}\n`);
 }

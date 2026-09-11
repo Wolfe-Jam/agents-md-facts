@@ -1,0 +1,39 @@
+faf_version: "3.0"
+project:
+  name: agents-md-facts
+  version: "0.1.0"
+  goal: Author a minimal AGENTS.md from the repo's facts. Never guessed.
+  main_language: TypeScript
+  type: cli
+commands:
+  install: bun install
+  build: bun run build
+  test: bun run test
+  lint: bun run lint
+key_files:
+  - src/cli.ts
+  - src/author.ts
+  - src/context.ts
+  - src/inject.ts
+  - package.json
+  - AGENTS.md
+stack:
+  framework: slotignored
+  css: slotignored
+  ui_library: slotignored
+  state: slotignored
+  backend: slotignored
+  api: slotignored
+  runtime: Bun
+  db: slotignored
+  connection: slotignored
+  hosting: npm
+  build: tsc
+  cicd: GitHub Actions
+human_context:
+  who: Teams that keep AGENTS.md next to the code
+  what: A CLI that authors a minimal AGENTS.md from detected repo facts
+  why: Hand-written agent files rot; LLM-written ones bloat. Facts from the tree stay true.
+  where: npm, GitHub
+  when: Public
+  how: npx agents-md-facts

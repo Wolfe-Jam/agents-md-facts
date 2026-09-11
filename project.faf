@@ -31,8 +31,8 @@ stack:
   build: tsc
   cicd: GitHub Actions
 human_context:
-  who: Teams that keep AGENTS.md next to the code
-  what: A CLI that authors a minimal AGENTS.md from detected repo facts
+  who: Teams/devs that keep AGENTS.md next to the code
+  what: A CLI that authors a minimal AGENTS.md as an agents-md-facts block; the rest of your file stays yours
   why: Hand-written agent files rot; LLM-written ones bloat. Facts from the tree stay true.
   where: npm, GitHub
   when: Public

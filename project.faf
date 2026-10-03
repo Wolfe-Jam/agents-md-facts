@@ -10,6 +10,7 @@ commands:
   build: bun run build
   test: bun run test
   lint: bun run lint
+  dev: bun run dev
 key_files:
   - src/cli.ts
   - src/author.ts
@@ -30,6 +31,13 @@ stack:
   hosting: npm
   build: tsc
   cicd: GitHub Actions
+  monorepo_tool: slotignored
+  pkg_manager: bun
+  workspaces: slotignored
+  admin: slotignored
+  cache: slotignored
+  search: slotignored
+  storage: slotignored
 human_context:
   who: Teams/devs that keep AGENTS.md next to the code
   what: A CLI that authors a minimal AGENTS.md as an agents-md-facts block; the rest of your file stays yours
@@ -37,3 +45,11 @@ human_context:
   where: npm, GitHub
   when: Public
   how: npx agents-md-facts
+monorepo:
+  packages_count: slotignored
+  build_orchestrator: slotignored
+  versioning_strategy: slotignored
+  shared_configs: slotignored
+  remote_cache: slotignored
+tech_stack:
+  - TypeScript

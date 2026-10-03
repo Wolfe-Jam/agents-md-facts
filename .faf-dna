@@ -15,16 +15,25 @@
         "Birth — initial context"
       ],
       "growth": 0
+    },
+    {
+      "version": "v1.0.1",
+      "timestamp": "2026-10-03T12:50:50.693Z",
+      "score": 100,
+      "changes": [
+        "faf auto"
+      ],
+      "growth": 33
     }
   ],
   "current": {
-    "version": "v1.0.0",
-    "score": 67,
-    "lastSync": "2026-07-21T23:05:16.399Z"
+    "version": "v1.0.1",
+    "score": 100,
+    "lastSync": "2026-10-03T12:50:50.693Z"
   },
   "growth": {
-    "totalGrowth": 0,
-    "daysActive": 0,
+    "totalGrowth": 33,
+    "daysActive": 73,
     "milestones": [
       {
         "type": "birth",
@@ -33,9 +42,25 @@
         "version": "v1.0.0",
         "label": "Birth",
         "emoji": "🐣"
+      },
+      {
+        "type": "peak",
+        "score": 100,
+        "date": "2026-10-03T12:50:50.693Z",
+        "version": "v1.0.1",
+        "label": "Peak",
+        "emoji": "🏔️"
+      },
+      {
+        "type": "current",
+        "score": 100,
+        "date": "2026-10-03T12:50:50.693Z",
+        "version": "v1.0.1",
+        "label": "Current",
+        "emoji": "📍"
       }
     ]
   },
-  "lastModified": "2026-07-21T23:05:16.401Z",
+  "lastModified": "2026-10-03T12:50:50.694Z",
   "format": "faf-dna-v1"
 }

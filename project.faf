@@ -32,7 +32,7 @@ stack:
   build: tsc
   cicd: GitHub Actions
   monorepo_tool: slotignored
-  pkg_manager: bun
+  pkg_manager: slotignored
   workspaces: slotignored
   admin: slotignored
   cache: slotignored

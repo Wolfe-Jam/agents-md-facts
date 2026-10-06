@@ -13,7 +13,7 @@ NONE  →  GOOD  →  BETTER  →  BEST
 | **NONE** | No agent instruction file |
 | **GOOD** | Some `AGENTS.md` (or peer file) exists — quality varies |
 | **BETTER** | A short, current, **facts-based** `AGENTS.md` an agent can trust |
-| **BEST** | BETTER **plus** durable project DNA (`.faf`) that authors/refreshes instruction files from verified facts |
+| **BEST** | BETTER **plus** `project.faf` that is **resident and used**: it sits in the repo **and** authors/refreshes the instruction files from verified facts |
 
 This repository is intentionally a **real open-source tool**, not a toy fixture.
 
@@ -22,7 +22,9 @@ This repository is intentionally a **real open-source tool**, not a toy fixture.
 | State | Where |
 |-------|--------|
 | **BETTER** | **`main`** and release tags (e.g. `v0.1.0`) |
-| **BEST** | A **branch and/or tag for print** when we add `project.faf` — same software, falsifiable git diff |
+| **BEST** | A **branch and/or tag for print** where `project.faf` also *authors* `AGENTS.md` — same software, falsifiable git diff |
+
+`project.faf` is **resident on `main`**, but `AGENTS.md` is authored from detected repo facts, not from `project.faf`. Resident but not used is still **BETTER**.
 
 **Product default = BETTER.** You do not need FAF (or any other stack) to install or run `agents-md-facts`.
 
@@ -44,7 +46,7 @@ Hand-written files rot. LLM-freewritten files often **bloat** and can hurt agent
 ```bash
 git checkout v0.1.0
 test -f AGENTS.md
-test ! -f project.faf   # product BETTER does not require project DNA
+test ! -f project.faf   # v0.1.0 predates project.faf; BETTER never requires it
 npx agents-md-facts --check
 ```
 

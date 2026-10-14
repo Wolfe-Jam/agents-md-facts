@@ -6,6 +6,7 @@
 [![npm](https://img.shields.io/npm/v/agents-md-facts?color=cb3837)](https://www.npmjs.com/package/agents-md-facts)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![DOI: Agents paper](https://img.shields.io/badge/DOI-Agents%20paper-FF6B35)](https://doi.org/10.5281/zenodo.21951641)
+[![Business card · Get yours →](https://wolfe-jam.github.io/agent-business-card/badge.svg)](https://wolfe-jam.github.io/agent-business-card/?repo=Wolfe-Jam/agents-md-facts)
 
 Hand-written agent files **rot**. LLM-written ones often **bloat** and can *reduce* task success ([Gloaguen et al., 2026](https://arxiv.org/abs/2602.11988)). This tool **authors** only what the tree declares — real build/test commands, entry points, toolchain conventions. Nothing invented. Nothing padded.
 

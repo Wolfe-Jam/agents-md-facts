@@ -1,0 +1,48 @@
+version: "1.0"
+agent:
+  name: agents-md-facts
+  displayName: agents-md-facts
+  id: urn:air:wolfe-jam.github.io:agent:agents-md-facts
+  version: 0.1.0
+  description: Authors an AGENTS.md from your repo's facts (build and test commands, entry points, toolchain conventions), never guessed.
+  homepage: https://wolfe-jam.github.io
+capabilities:
+  - name: Author
+    type: tool
+    description: write or refresh the AGENTS.md block from the repo's commands, entry points and toolchain conventions
+    tags:
+      - author
+  - name: Check
+    type: tool
+    description: exit 1 when AGENTS.md is missing or stale against the repo (--check)
+    tags:
+      - check
+  - name: Dry run
+    type: tool
+    description: print the plan and write nothing (--dry-run)
+    tags:
+      - dry run
+  - name: Stdout
+    type: tool
+    description: print the managed block to stdout (--stdout)
+    tags:
+      - stdout
+  - name: GitHub Action
+    type: tool
+    description: fail the build when AGENTS.md is missing or stale
+    tags:
+      - github action
+endpoints:
+  - protocol: cli
+    transport: stdio
+    location: agents-md-facts
+metadata:
+  cards:
+    domain: wolfe-jam.github.io
+    examples:
+      - Write an AGENTS.md for this repo from its real commands
+      - Is our AGENTS.md stale?
+      - How do I keep AGENTS.md current in CI?
+    packages:
+      - registryType: npm
+        identifier: agents-md-facts

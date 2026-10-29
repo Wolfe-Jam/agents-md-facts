@@ -93,4 +93,4 @@ Optional depth on facts-driven project DNA: [faf.one/agents](https://faf.one/age
 
 ---
 
-⭐ Bookmarks it for you, helps other devs find it too.
+⭐ [Star it on GitHub](https://github.com/Wolfe-Jam/agents-md-facts): bookmarks it for you, helps other devs find it too.

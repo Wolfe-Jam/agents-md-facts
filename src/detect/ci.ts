@@ -1,105 +1,123 @@
 import { existsSync, readdirSync, readFileSync } from 'fs';
 import { join } from 'path';
+import { parse } from 'yaml';
 
 /** One CI step that runs a command. */
 export interface CiStep {
-  /** The command, verbatim (a multi-line `run: |` block keeps its lines). */
+  /** The command, verbatim. A folded (`>`) block is already one line, as the shell sees it. */
   run: string;
-  /** The step's `if:` condition, verbatim, when it has one. */
+  /** The step's own `if:` condition, verbatim, when it has one. */
   if?: string;
+  /** The step's `name:`, when it has one. */
+  name?: string;
+}
+
+/** One job of a workflow that runs at least one command. */
+export interface CiJob {
+  /** The job's id under `jobs:`. */
+  id: string;
+  /** The job's own `if:` condition, when it has one. */
+  if?: string;
+  /** Where it runs: `runs-on` (a label set joined with `+`), or the matrix `os` values it names. */
+  runsOn: string[];
+  /** Matrix axes with plain values, e.g. `node 22, 24` (`os` is in `runsOn`). */
+  matrix: string[];
+  steps: CiStep[];
 }
 
 /** What one GitHub Actions workflow runs. */
 export interface DetectedWorkflow {
   /** Path from the repo root, e.g. `.github/workflows/ci.yml`. */
   file: string;
-  /** Runners and versions from `runs-on:` and the matrix (`os`, `node`, `*-version`). */
+  /** The events that start it (`on:`), in file order. */
   on: string[];
-  /** The command steps, in file order; dependency installs are left out. */
-  steps: CiStep[];
+  jobs: CiJob[];
 }
 
-/** Install steps every agent already knows; they cache nothing worth a line. */
-const INSTALL = /^(npm (ci|install)|bun install|pnpm install|yarn( install)?)(\s+--?[\w-]+)*$/;
+/** Dependency installs every agent already knows; they cache nothing worth a line. */
+const INSTALL = /^(npm (ci|i|install)|bun (i|install)|pnpm (i|install)|yarn( install)?)(\s+\S+)*$/;
 
-function unquote(s: string): string {
-  const t = s.trim();
-  return /^(['"]).*\1$/.test(t) ? t.slice(1, -1) : t;
+type Obj = Record<string, unknown>;
+const isObj = (v: unknown): v is Obj => typeof v === 'object' && v !== null && !Array.isArray(v);
+const scalar = (v: unknown): string | null =>
+  typeof v === 'string' ? v.trim() || null : typeof v === 'number' || typeof v === 'boolean' ? String(v) : null;
+const hasExpr = (s: string): boolean => s.includes('${{');
+
+function triggers(on: unknown): string[] {
+  if (typeof on === 'string') return [on];
+  if (Array.isArray(on)) return on.map(scalar).filter((s): s is string => s !== null);
+  if (isObj(on)) return Object.keys(on);
+  return [];
 }
 
-function flowList(s: string): string[] {
-  return s.split(',').map(unquote).filter(Boolean);
+function readJob(id: string, job: Obj): CiJob | null {
+  const strategy = isObj(job.strategy) ? job.strategy : {};
+  const matrix = isObj(strategy.matrix) ? strategy.matrix : {};
+  const axes = new Map<string, string[]>();
+  for (const [key, value] of Object.entries(matrix)) {
+    if (key === 'include' || key === 'exclude' || !Array.isArray(value)) continue;
+    const plain = value.map(scalar).filter((s): s is string => s !== null && !hasExpr(s));
+    if (plain.length === value.length && plain.length) axes.set(key, plain);
+  }
+
+  // `runs-on` is one label set; `${{ matrix.os }}` takes the matrix's os values.
+  let runsOn: string[] = [];
+  const ro = job['runs-on'];
+  if (typeof ro === 'string') {
+    runsOn = /^\$\{\{\s*matrix\.os\s*\}\}$/.test(ro.trim()) ? axes.get('os') ?? [] : hasExpr(ro) ? [] : [ro.trim()];
+  } else if (Array.isArray(ro)) {
+    const labels = ro.map(scalar).filter((s): s is string => s !== null && !hasExpr(s));
+    if (labels.length === ro.length && labels.length) runsOn = [labels.join('+')];
+  }
+
+  const steps: CiStep[] = [];
+  for (const step of Array.isArray(job.steps) ? job.steps : []) {
+    if (!isObj(step)) continue;
+    const run = scalar(step.run);
+    if (!run || INSTALL.test(run)) continue;
+    const out: CiStep = { run };
+    const cond = scalar(step.if);
+    if (cond) out.if = cond;
+    const name = scalar(step.name);
+    if (name) out.name = name;
+    steps.push(out);
+  }
+  if (!steps.length) return null;
+
+  const cond = scalar(job.if);
+  const out: CiJob = {
+    id,
+    runsOn,
+    matrix: [...axes].filter(([k]) => k !== 'os').map(([k, v]) => `${k} ${v.join(', ')}`),
+    steps,
+  };
+  if (cond) out.if = cond;
+  return out;
 }
 
 /**
- * Read one workflow's `run:` steps and where it runs. A small line reader, not
- * a YAML parser: it takes what a workflow literally says — `runs-on:`, matrix
- * lists written `[a, b]`, and `run:` steps (single-line or a `|`/`>` block).
- * Anything it can't read is left out, and the file is named so an agent can
- * read the rest. Pure.
+ * Read one workflow: its triggers, and for each job its condition, runners,
+ * matrix and `run:` steps. Parsed as YAML, so a job's `if:` stays with its job,
+ * comments are dropped and folded blocks read as the shell sees them. Reusable
+ * workflows and `uses:` steps run no command here and are left out. Pure.
  */
-export function parseWorkflow(text: string): { on: string[]; steps: CiStep[] } {
-  const lines = text.split(/\r?\n/);
-  const runners: string[] = [];
-  const versions: string[] = [];
-  const steps: CiStep[] = [];
-  let cur: CiStep | null = null;
-  let curIf: string | undefined;
-
-  const flush = (): void => {
-    if (cur) {
-      if (curIf) cur.if = curIf;
-      if (!INSTALL.test(cur.run)) steps.push(cur);
-    }
-    cur = null;
-    curIf = undefined;
-  };
-
-  const at = (n: number): string => lines[n] ?? '';
-  for (let i = 0; i < lines.length; i++) {
-    const line = at(i);
-    if (/^\s*-\s/.test(line)) flush();
-    const body = line.replace(/^\s*-\s+/, (m) => ' '.repeat(m.length));
-
-    const runsOn = /^\s*runs-on:\s*(.+?)\s*$/.exec(body)?.[1];
-    if (runsOn !== undefined) {
-      if (!runsOn.includes('${{')) {
-        const v = runsOn.startsWith('[') ? flowList(runsOn.slice(1, -1)) : [unquote(runsOn)];
-        for (const r of v) if (!runners.includes(r)) runners.push(r);
-      }
-      continue;
-    }
-    const matrix = /^\s*(os|node|node-version|[a-z]+-version):\s*\[(.*)\]\s*$/.exec(body);
-    if (matrix) {
-      const key = matrix[1] ?? '';
-      const values = flowList(matrix[2] ?? '').filter((v) => !v.includes('${{'));
-      if (key === 'os') { for (const v of values) if (!runners.includes(v)) runners.push(v); }
-      else if (values.length) versions.push(`${key === 'node' || key === 'node-version' ? 'Node' : key} ${values.join(', ')}`);
-      continue;
-    }
-    const cond = /^\s*if:\s*(.+?)\s*$/.exec(body)?.[1];
-    if (cond !== undefined) { curIf = unquote(cond); continue; }
-
-    const run = /^(\s*)run:\s*(.*?)\s*$/.exec(body);
-    if (run) {
-      const indent = (run[1] ?? '').length;
-      let cmd = run[2] ?? '';
-      if (/^[|>][-+]?$/.test(cmd)) {
-        const block: string[] = [];
-        while (i + 1 < lines.length && (at(i + 1).trim() === '' || at(i + 1).search(/\S/) > indent)) {
-          block.push(at(++i));
-        }
-        const filled = block.filter((l) => l.trim());
-        const pad = filled.length ? Math.min(...filled.map((l) => l.search(/\S/))) : 0;
-        cmd = block.map((l) => l.slice(pad)).join('\n').trim();
-      } else {
-        cmd = unquote(cmd);
-      }
-      if (cmd) cur = { run: cmd };
+export function parseWorkflow(text: string): { on: string[]; jobs: CiJob[] } {
+  let doc: unknown;
+  try {
+    doc = parse(text);
+  } catch {
+    return { on: [], jobs: [] };
+  }
+  if (!isObj(doc)) return { on: [], jobs: [] };
+  const jobs: CiJob[] = [];
+  if (isObj(doc.jobs)) {
+    for (const [id, job] of Object.entries(doc.jobs)) {
+      if (!isObj(job)) continue;
+      const read = readJob(id, job);
+      if (read) jobs.push(read);
     }
   }
-  flush();
-  return { on: [...runners, ...versions], steps };
+  return { on: triggers(doc.on), jobs };
 }
 
 /** Every GitHub Actions workflow in the repo that runs a command, by file name. Pure. */
@@ -116,8 +134,8 @@ export function detectCi(dir: string): DetectedWorkflow[] {
   for (const f of files) {
     let text: string;
     try { text = readFileSync(join(wf, f), 'utf-8'); } catch { continue; }
-    const { on, steps } = parseWorkflow(text);
-    if (steps.length) out.push({ file: `.github/workflows/${f}`, on, steps });
+    const { on, jobs } = parseWorkflow(text);
+    if (jobs.length) out.push({ file: `.github/workflows/${f}`, on, jobs });
   }
   return out;
 }

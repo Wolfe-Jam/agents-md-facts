@@ -63,7 +63,8 @@ export function injectBlock(path: string, block: string): void {
  */
 export function extractBlock(path: string): string | null {
   if (!existsSync(path)) return null;
-  const existing = readFileSync(path, 'utf-8');
+  // A Windows checkout (core.autocrlf) has CRLF line ends; the authored block has LF.
+  const existing = readFileSync(path, 'utf-8').replace(/\r\n/g, '\n');
   const s = existing.indexOf(START);
   const e = existing.indexOf(END);
   if (s === -1 || e === -1 || e <= s) return null;

@@ -1,7 +1,10 @@
 - id: agents-md-facts
   name: agents-md-facts
-  description: Keep AGENTS.md fresh (detect from repo facts)
-  entry: agents-md-facts --check
-  language: node
-  files: ^(package\.json|Cargo\.toml|pyproject\.toml|go\.mod|\.env\.example|tsconfig\.json|\.github/|test|src/)
-  stages: [commit]
+  description: Fail the commit when AGENTS.md no longer matches the repo's facts
+  # Runs the published package (dist/ is not in git). Needs Node and network.
+  # The version is set at each release, to match the tag your `rev` names.
+  entry: npx --yes agents-md-facts@0.1.0 --check
+  language: system
+  pass_filenames: false
+  always_run: true
+  stages: [pre-commit]

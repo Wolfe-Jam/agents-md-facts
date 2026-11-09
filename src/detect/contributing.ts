@@ -20,7 +20,19 @@ export function detectContributing(dir: string): DetectedContributing | null {
     if (!existsSync(p)) continue;
     let text = '';
     try { text = readFileSync(p, 'utf-8'); } catch { /* the file is still there */ }
-    const sections = [...text.matchAll(/^##\s+(.+?)\s*#*\s*$/gm)].map((m) => (m[1] ?? "").trim());
+    const sections: string[] = [];
+    let fence: string | null = null;
+    for (const line of text.split(/\r?\n/)) {
+      const f = /^\s*(`{3,}|~{3,})/.exec(line)?.[1];
+      if (f) {
+        if (fence === null) fence = f[0] ?? null;
+        else if (f[0] === fence) fence = null;
+        continue;
+      }
+      if (fence !== null) continue;
+      const h = /^##\s+(.+?)\s*#*\s*$/.exec(line)?.[1];
+      if (h) sections.push(h.trim());
+    }
     return { file, sections };
   }
   return null;

@@ -27,7 +27,7 @@ Everything you write outside those markers is preserved. Keep the markers when y
 
 ## What it authors
 
-Description and orientation (language, kind, Node version) · setup & build · tests · before a release (the `prepublishOnly` chain) · CI (what your workflows run) · where things live (folders and entry points) · conventions · guardrails · definition of done · security (if secrets files exist) · commit & PR (with a pointer to your contributing guide).
+Description and orientation (language, kind, Node version) · setup & build · tests · before a release (what `npm publish` runs first: `prepublishOnly`, `prepack`) · CI (each workflow's jobs and steps, checks on push and pull requests first) · where things live (folders and entry points) · conventions · guardrails · definition of done · security (if secrets files exist) · commit & PR (with a pointer to your contributing guide).
 
 Each section appears only when the repo has something for it.
 
@@ -43,10 +43,17 @@ Fail the build when `AGENTS.md` drifts from the repo:
 
 ```yaml
 # .github/workflows/agents-md.yml
-- uses: Wolfe-Jam/agents-md-facts@v0.1.0
+name: AGENTS.md
+on: [push, pull_request]
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: Wolfe-Jam/agents-md-facts@v0.1.0
 ```
 
-Or: `npx agents-md-facts --check`.
+The tag pins the tool: `@v0.1.0` runs agents-md-facts 0.1.0. Or: `npx agents-md-facts --check`.
 
 ## Pre-commit hook
 
@@ -61,7 +68,7 @@ repos:
       - id: agents-md-facts
 ```
 
-Then: `pre-commit install`.
+Then: `pre-commit install`. The hook runs the published package with `npx`, so it needs Node and a network connection.
 
 ## Ladder
 

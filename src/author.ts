@@ -1,8 +1,37 @@
 import type { RepoContext } from './context.js';
-import { isBuildScript, scriptCommand } from './detect/commands.js';
+import { isBuildScript, isGateScript } from './detect/commands.js';
+import type { DetectedWorkflow } from './detect/ci.js';
 
-/** CI steps shown per workflow before pointing to the file for the rest. */
-const CI_STEPS = 12;
+/**
+ * Lines the CI section may use. A repo with many workflows gets the ones that
+ * run on push / pull_request first; the rest are named by file, so the whole
+ * file stays short (the doctrine test caps it at 150 lines).
+ */
+const CI_BUDGET = 40;
+
+/** Events that make a workflow a check on changes, not a release or a chore. */
+const CHECK_EVENTS = new Set(['push', 'pull_request', 'pull_request_target', 'merge_group']);
+
+/** One workflow as a fenced block: a header line per job, then its steps (first line of each). */
+function workflowLines(wf: DetectedWorkflow): string[] {
+  const out = ['```bash'];
+  for (const job of wf.jobs) {
+    const where = [...job.runsOn.length ? [job.runsOn.join(', ')] : [], ...job.matrix];
+    out.push(`# job ${job.id}${job.if ? ` · if: ${job.if}` : ''}${where.length ? ` · ${where.join(' · ')}` : ''}`);
+    for (const step of job.steps) {
+      if (step.if) out.push(`# if: ${step.if}`);
+      const lines = step.run.split('\n');
+      if (lines.length === 1) { out.push(step.run); continue; }
+      // A script: its name says what it does; else its first line that isn't shell setup.
+      if (step.name) { out.push(`# ${step.name} (${lines.length}-line script in the file)`); continue; }
+      const first = lines.find((l) => l.trim() && !/^\s*(set -|#)/.test(l)) ?? lines[0] ?? '';
+      out.push(first);
+      out.push(`# … ${lines.length - 1} more line${lines.length > 2 ? 's' : ''} in this step`);
+    }
+  }
+  out.push('```');
+  return out;
+}
 
 /**
  * The banner written at the top of the managed block. It says what authored the
@@ -62,7 +91,8 @@ export function authorAgentsMd(ctx: RepoContext, now: Date = new Date()): string
   // lint + typecheck (+ other *check*) — verify bar, not setup
   const lintCmds = entries.filter(([k]) => /lint|check/i.test(k) && !/test/i.test(k));
   const setupCmds = entries.filter(([k]) => !/test|lint|check/i.test(k));
-  const testCmd = testCmds[0]?.[1];
+  // The guardrail names the plain `test` script when there is one.
+  const testCmd = (testCmds.find(([k]) => k === 'test') ?? testCmds[0])?.[1];
   const buildCmd = setupCmds.find(([k]) => isBuildScript(k))?.[1];
   // Full verify list for "Run the tests" (tests first, then lint/typecheck)
   const verifyCmds = [...testCmds, ...lintCmds];
@@ -109,34 +139,45 @@ export function authorAgentsMd(ctx: RepoContext, now: Date = new Date()): string
   }
 
   // §3b Before a release — the gate the manifest declares
-  if (ctx.release) {
+  const release = ctx.release;
+  if (release?.scripts.length) {
     push('## Before a release');
     push();
-    push(ctx.release.hook
-      ? `Publishing runs \`${ctx.release.name}\` first:`
-      : `\`${scriptCommand(ctx.packageManager, 'release')}\` runs:`);
+    const names = release.scripts.map((r) => `\`${r.name}\``).join(', then ');
+    push(release.kind === 'publish'
+      ? `\`npm publish\` runs ${names} first:`
+      : 'The `release` script runs:');
     push();
     push('```bash');
-    push(ctx.release.command);
+    for (const r of release.scripts) {
+      if (release.scripts.length > 1) push(`# ${r.name}`);
+      push(r.command);
+    }
     push('```');
     push();
   }
 
   // §3c CI — what the workflows run, so CI-only checks aren't a surprise
-  const ci = ctx.ci ?? [];
+  const ci = [...(ctx.ci ?? [])].sort((a, b) =>
+    Number(!a.on.some((e) => CHECK_EVENTS.has(e))) - Number(!b.on.some((e) => CHECK_EVENTS.has(e))));
   if (ci.length) {
     push('## CI');
     push();
+    let used = 0;
+    const rest: string[] = [];
     for (const wf of ci) {
-      push([`\`${wf.file}\``, ...(wf.on.length ? [wf.on.join(' · ')] : [])].join(' · '));
+      const header = `\`${wf.file}\`${wf.on.length ? ` (on ${wf.on.join(', ')})` : ''}`;
+      let block = workflowLines(wf);
+      if (used > 0 && used + block.length + 2 > CI_BUDGET) { rest.push(header); continue; }
+      if (block.length > CI_BUDGET) block = [...block.slice(0, CI_BUDGET - 2), '# … more in the file', '```'];
+      push(header);
       push();
-      push('```bash');
-      for (const step of wf.steps.slice(0, CI_STEPS)) {
-        if (step.if) push(`# if: ${step.if}`);
-        push(step.run);
-      }
-      if (wf.steps.length > CI_STEPS) push(`# … ${wf.steps.length - CI_STEPS} more steps in the file`);
-      push('```');
+      for (const l of block) push(l);
+      push();
+      used += block.length + 2;
+    }
+    if (rest.length) {
+      push(`Also: ${rest.join(' · ')}.`);
       push();
     }
   }
@@ -171,7 +212,7 @@ export function authorAgentsMd(ctx: RepoContext, now: Date = new Date()): string
   if (testCmd) always.push(`run the tests (\`${testCmd}\`)`);
   if (buildCmd) always.push('build the project');
   const never = ['force-push'];
-  if (ctx.isGitRepo) never.push('push to `main`');
+  if (ctx.isGitRepo) never.push('push to the default branch');
   never.push('commit secrets');
   if (ctx.secrets) never.push(`commit \`${ctx.secrets.secrets}\``);
   push('## Guardrails');
@@ -183,8 +224,8 @@ export function authorAgentsMd(ctx: RepoContext, now: Date = new Date()): string
 
   // §7 Definition of Done — composed from detected lint + test commands
   const dod: string[] = [];
-  for (const [, v] of lintCmds) dod.push(`\`${v}\` exits 0`);
-  for (const [, v] of testCmds) dod.push(`\`${v}\` passes`);
+  for (const [k, v] of lintCmds) if (isGateScript(k)) dod.push(`\`${v}\` exits 0`);
+  for (const [k, v] of testCmds) if (isGateScript(k)) dod.push(`\`${v}\` passes`);
   dod.push('committed with a clear message');
   push('## Definition of Done');
   push();
@@ -210,7 +251,7 @@ export function authorAgentsMd(ctx: RepoContext, now: Date = new Date()): string
     }
     if (ctx.isGitRepo) {
       push('- Write a clear, descriptive commit message.');
-      push('- Branch off `main`; never commit to `main` directly — open a PR for review.');
+      push('- Branch off the default branch; never commit to it directly — open a PR for review.');
       push('- If build/test scripts or layout change, refresh this file in the **same PR** (`npx agents-md-facts`).');
     }
     push();

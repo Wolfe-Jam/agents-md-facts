@@ -14,6 +14,21 @@ const ROLES: RegExp[] = [
   /^(dev|start|serve)$/,
 ];
 
+/**
+ * Variants that never exit or that change files (`test:watch`, `lint:fix`):
+ * scripts a developer runs, never a check an agent should wait on.
+ */
+const NOT_A_CHECK = /:(watch|fix|ui|dev|update|debug|open|serve)$/;
+
+/**
+ * The checks the Definition of Done names: the plain `test`, `lint` and
+ * typecheck scripts. Other `test:*` scripts are listed to run, not required:
+ * the repo doesn't say they must pass.
+ */
+export function isGateScript(name: string): boolean {
+  return /^(test|lint|typecheck|type-check|check-types|check)$/.test(name);
+}
+
 /** True for a script name that plays the build role (`build`, `compile`, `bundle`). */
 export function isBuildScript(name: string): boolean {
   return /^(build|compile|bundle)$/.test(name);
@@ -35,8 +50,13 @@ export function scriptCommand(pm: string, name: string): string {
   }
 }
 
-/** The package manager a Node repo uses, from its lockfile (npm when there is none). */
-export function nodePackageManager(dir: string): string {
+/**
+ * The package manager a Node repo uses: the one package.json declares in
+ * `packageManager` (e.g. `pnpm@9.1.0`), else the one its lockfile shows, else npm.
+ */
+export function nodePackageManager(dir: string, pkg?: PackageJson | null): string {
+  const declared = typeof pkg?.packageManager === 'string' ? /^(npm|pnpm|yarn|bun)@/.exec(pkg.packageManager)?.[1] : undefined;
+  if (declared) return declared;
   if (existsSync(join(dir, 'bun.lock')) || existsSync(join(dir, 'bun.lockb'))) return 'bun';
   if (existsSync(join(dir, 'pnpm-lock.yaml'))) return 'pnpm';
   if (existsSync(join(dir, 'yarn.lock'))) return 'yarn';
@@ -55,8 +75,9 @@ export function detectCommands(dir: string, pkg: PackageJson | null): Record<str
 
   // From package.json scripts (most reliable)
   if (pkg?.scripts) {
-    const pm = nodePackageManager(dir);
-    const names = Object.keys(pkg.scripts).filter((k) => typeof pkg.scripts?.[k] === 'string' && pkg.scripts[k].trim());
+    const pm = nodePackageManager(dir, pkg);
+    const names = Object.keys(pkg.scripts)
+      .filter((k) => typeof pkg.scripts?.[k] === 'string' && pkg.scripts[k].trim() && !NOT_A_CHECK.test(k));
     for (const role of ROLES) {
       for (const k of names) if (role.test(k)) commands[k] = scriptCommand(pm, k);
     }

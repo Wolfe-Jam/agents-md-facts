@@ -33,12 +33,12 @@ describe('A1 — the release gate', () => {
   test('prepublishOnly is shown verbatim, as what publishing runs', () => {
     const md = author(repo({ 'package.json': pkg({ scripts: { test: 'node --test', prepublishOnly: 'npm run build && npm test && npm run smoke' } }) }));
     expect(md).toContain('## Before a release');
-    expect(md).toContain('Publishing runs `prepublishOnly` first:');
+    expect(md).toContain('`npm publish` runs `prepublishOnly` first:');
     expect(md).toContain('npm run build && npm test && npm run smoke');
   });
   test('a `release` script is shown with its run command', () => {
     const md = author(repo({ 'package.json': pkg({ scripts: { release: 'changeset publish' } }) }));
-    expect(md).toContain('`npm run release` runs:');
+    expect(md).toContain('The `release` script runs:');
     expect(md).toContain('changeset publish');
   });
   test('no release script → no section', () => {
@@ -70,17 +70,24 @@ jobs:
 `;
   test('runners, versions and steps; installs left out; conditions kept', () => {
     expect(parseWorkflow(WF)).toEqual({
-      on: ['ubuntu-latest', 'windows-latest', 'Node 22, 24'],
-      steps: [
-        { run: 'npm test' },
-        { run: 'npm run coverage:checks', if: "matrix.os == 'ubuntu-latest'" },
-        { run: 'npm run build:validator\ngit diff --exit-code -- worker/validator.cjs' },
-      ],
+      on: ['push'],
+      jobs: [{
+        id: 'verify',
+        runsOn: ['ubuntu-latest', 'windows-latest'],
+        matrix: ['node 22, 24'],
+        steps: [
+          { run: 'npm test' },
+          { run: 'npm run coverage:checks', if: "matrix.os == 'ubuntu-latest'", name: 'Coverage' },
+          { run: 'npm run build:validator\ngit diff --exit-code -- worker/validator.cjs', name: 'Drift' },
+        ],
+      }],
     });
   });
   test('the CI section names the workflow file and its commands', () => {
     const md = author(repo({ 'package.json': pkg({}), '.github/workflows/ci.yml': WF }));
-    expect(md).toContain('`.github/workflows/ci.yml` · ubuntu-latest · windows-latest · Node 22, 24');
+    expect(md).toContain('`.github/workflows/ci.yml` (on push)');
+    expect(md).toContain('# job verify · ubuntu-latest, windows-latest · node 22, 24');
+    expect(md).toContain('# Drift (2-line script in the file)');
     expect(md).toContain("# if: matrix.os == 'ubuntu-latest'\nnpm run coverage:checks");
     expect(md).not.toContain('npm ci');
   });

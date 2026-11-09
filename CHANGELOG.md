@@ -20,6 +20,22 @@ missed facts the repo already stated:
 - **Renamed scripts:** scripts are picked by role, so `compile`/`bundle` count as the build, and `test:*`, `format:check`, `type-check` are verify commands.
 - **The banner says to keep the start/end markers,** so a merged file can still be refreshed.
 
+From the review of those changes (every line is still a fact):
+
+- **CI is read as YAML** (new dependency: `yaml`). Each job shows its own `if:`, runners and matrix; comments are dropped, folded blocks read as one line, `with: run:` is not a step. A multi-line step shows its `name:`. Workflows that run on push or pull requests come first; past 40 lines the rest are named by file.
+- **Before a release** shows what `npm publish` runs: `prepublishOnly`, then `prepack`. `prepublish` is gone: since npm 7 it runs on install.
+- **Watch and fix scripts** (`test:watch`, `lint:fix`) are not listed. The Definition of Done names only `test`, `lint` and typecheck.
+- **Folders:** a script uses a folder only when it names its path (`NODE_ENV=test` doesn't count; `./scripts/x.sh` does). `lib/` and `spec/` get no guessed gloss; `packages/` is "workspace packages" only when a workspace lists it; `pnpm-workspace.yaml`, `turbo.json`, `nx.json` and `lerna.json` are listed. Outside git, folders the root `.gitignore` ignores are left out.
+- **Entry points:** a scoped package's command is its unscoped name; `tsconfig.json` `outDir`/`rootDir` and nested `exports` conditions are followed.
+- **Package manager:** package.json `packageManager` wins over lockfiles, for orientation and commands alike.
+- **Git:** one check (`git rev-parse`) decides git rules and the folder list. The rules say "the default branch", not `main`.
+- **`--check` on Windows:** a CRLF checkout is no longer stale.
+- **Contributing headings** inside code fences are skipped.
+- **The pre-commit hook works:** it runs `npx agents-md-facts@<this version> --check` (it failed to install before, because `dist/` isn't in git). It needs Node and network.
+- **The Action defaults to its own version,** not `latest`, so `@v0.2.0` runs 0.2.0.
+
+**Upgrading from 0.1.0:** run `npx agents-md-facts` once. The output changed, so `--check` reports the old file as stale until you refresh it.
+
 ## 0.1.0
 
 Honest to a fault — a minimal AGENTS.md, authored from your repo's facts, never guessed.

@@ -1,11 +1,11 @@
 <!-- agents:from-facts:start -->
-<!-- authored by agents-md-facts — from your repo's facts, never guessed · re-run to refresh · authored: 2026-08-20T03:08:42.103Z -->
+<!-- authored by agents-md-facts — from your repo's facts, never guessed · re-run to refresh · keep the start/end markers · authored: 2026-11-09T21:13:54.383Z -->
 
 # AGENTS.md — go
 
 Go
 
-*Authored: 2026-08-20*
+*Authored: 2026-11-09*
 
 ## Setup & build
 
@@ -21,7 +21,8 @@ go test ./...
 
 ## Where things live
 
-- `go.mod`
+Entry points:
+
 - `main.go`
 
 ## Guardrails

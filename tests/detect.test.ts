@@ -21,10 +21,10 @@ const rust = join(EX, 'rust');
 const go = join(EX, 'go');
 
 describe('commands', () => {
-  test('node-ts → npm run scripts', () => {
+  test('node-ts → the repo\'s own spelling: `npm test`, `npm run` for the rest (A5)', () => {
     expect(detectCommands(nodeTs, readPackageJson(nodeTs))).toEqual({
       build: 'npm run build',
-      test: 'npm run test',
+      test: 'npm test',
       lint: 'npm run lint',
       dev: 'npm run dev',
     });

@@ -1,11 +1,13 @@
 <!-- agents:from-facts:start -->
-<!-- authored by agents-md-facts — from your repo's facts, never guessed · re-run to refresh · authored: 2026-08-20T03:12:49.318Z -->
+<!-- authored by agents-md-facts — from your repo's facts, never guessed · re-run to refresh · keep the start/end markers · authored: 2026-11-09T21:14:00.309Z -->
 
 # AGENTS.md — agents-md-facts
 
-TypeScript · CLI · Node.js · bun package manager · v0.1.0
+Honest to a fault — a minimal AGENTS.md, authored from your repo's facts, never guessed.
 
-*Authored: 2026-08-20*
+TypeScript · CLI · Node.js >=18 · bun package manager · v0.1.0
+
+*Authored: 2026-11-09*
 
 ## Setup & build
 
@@ -23,21 +25,36 @@ bun run lint
 bun run typecheck
 ```
 
+## Before a release
+
+Publishing runs `prepublishOnly` first:
+
+```bash
+bun run build
+```
+
+## CI
+
+`.github/workflows/ci.yml` · ubuntu-latest
+
+```bash
+bunx tsc --noEmit
+bun run lint
+bun test
+bun run src/cli.ts --check
+```
+
 ## Where things live
 
-- `package.json`
-- `src/index.ts`
-- `src/cli.ts`
-- `src/detect/`
-- `src/author.ts`
-- `src/context.ts`
-- `src/inject.ts`
-- `tests/`
-- `examples/`
-- `README.md`
-- `CHANGELOG.md`
-- `tsconfig.json`
-- `eslint.config.js`
+- `docs/` — docs
+- `examples/` — examples
+- `src/` — source, used by `bun run dev`, `bun run lint`
+- `tests/` — tests
+
+Entry points:
+
+- `src/cli.ts` — the `agents-md-facts` command
+- `src/index.ts` — library entry
 
 ## Conventions
 
@@ -57,6 +74,7 @@ Done when: `bun run lint` exits 0 · `bun run typecheck` exits 0 · `bun run tes
 
 ## Commit & PR
 
+- Follow `CONTRIBUTING.md` (The governing filter · Develop · Test · Build · License).
 - Write a clear, descriptive commit message.
 - Branch off `main`; never commit to `main` directly — open a PR for review.
 - If build/test scripts or layout change, refresh this file in the **same PR** (`npx agents-md-facts`).

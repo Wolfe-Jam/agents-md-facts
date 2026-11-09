@@ -7,6 +7,19 @@ to [Semantic Versioning](https://semver.org/).
 
 - Default author **skips the write** when facts are unchanged (timestamp ignored). A no-op re-run does not dirty git.
 
+From agent runs on two real repos, where an agent reading the authored file
+missed facts the repo already stated:
+
+- **Before a release:** the `prepublishOnly` chain (or `prepack`, `prepublish`, a `release` script), verbatim.
+- **CI:** each GitHub Actions workflow's runners, versions and `run:` steps, with `if:` conditions; installs left out.
+- **Contributing guide:** Commit & PR points to `CONTRIBUTING.md` and lists its headings; the rules stay in the guide.
+- **Description:** package.json `description` under the title.
+- **Command spelling:** `npm test` / `npm start`; `pnpm` and `yarn` repos use their own runner (`bun run test` stays).
+- **Where things live:** the top-level folders git tracks, each with what the repo says it is (a wrangler `main`, the scripts that use it, or the folder's usual meaning), then the entry points from `bin` / `exports` / `main`, traced to source. Config files are no longer listed.
+- **Node version:** `engines.node` on the orientation line.
+- **Renamed scripts:** scripts are picked by role, so `compile`/`bundle` count as the build, and `test:*`, `format:check`, `type-check` are verify commands.
+- **The banner says to keep the start/end markers,** so a merged file can still be refreshed.
+
 ## 0.1.0
 
 Honest to a fault — a minimal AGENTS.md, authored from your repo's facts, never guessed.

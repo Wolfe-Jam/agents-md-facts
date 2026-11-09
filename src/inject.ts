@@ -10,6 +10,25 @@ export const END = '<!-- agents:from-facts:end -->';
  */
 const FINGERPRINT = '<!-- authored by agents-md-facts';
 
+/** The `##` sections this tool writes. A markerless file with any other heading has the user's text in it. */
+const TOOL_SECTIONS = new Set([
+  'Setup & build', 'Run the tests', 'Before a release', 'CI', 'Where things live', 'Conventions',
+  'Guardrails', 'Definition of Done', 'Security & secrets', 'Commit & PR',
+]);
+
+function onlyToolSections(text: string): boolean {
+  let fence = false;
+  for (const line of text.split('\n')) {
+    if (/^\s*(`{3,}|~{3,})/.test(line)) { fence = !fence; continue; }
+    if (fence) continue;
+    const h = /^(#{1,6})\s+(.+?)\s*$/.exec(line);
+    if (!h) continue;
+    if ((h[1] ?? '').length === 1 && (h[2] ?? '').startsWith('AGENTS.md')) continue;
+    if (!TOOL_SECTIONS.has(h[2] ?? '')) return false;
+  }
+  return true;
+}
+
 /** Wrap an authored block body in the start/end markers. */
 export function wrapBlock(block: string): string {
   return `${START}\n${block.trim()}\n${END}`;
@@ -47,8 +66,11 @@ export function injectBlock(path: string, block: string): void {
     return;
   }
 
-  // 3. Markerless legacy output — led by the tool's own fingerprint. Reclaim it.
-  if (existing.trimStart().startsWith(FINGERPRINT)) {
+  // 3. Markerless legacy output — led by the tool's own fingerprint, and nothing
+  //    but the tool's own sections in it. Reclaim it. A file that kept the banner
+  //    but gained hand-written sections (a merge that dropped the markers) falls
+  //    through to 4: its text is kept.
+  if (existing.trimStart().startsWith(FINGERPRINT) && onlyToolSections(existing)) {
     writeFileSync(path, `${wrapped}\n`, 'utf-8');
     return;
   }

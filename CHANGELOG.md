@@ -34,6 +34,17 @@ From the review of those changes (every line is still a fact):
 - **The pre-commit hook works:** it runs `npx agents-md-facts@<this version> --check` (it failed to install before, because `dist/` isn't in git). It needs Node and network.
 - **The Action defaults to its own version,** not `latest`, so `@v0.2.0` runs 0.2.0.
 
+From a second review (goose, run on ~19 real repos):
+
+- **CI shows only workflows that run on push or pull requests;** release, schedule and manual workflows are named, not copied, so no publish or secret-setting commands land in AGENTS.md. On goose's own repo the file went from 1,455 lines to 98.
+- **A code fence inside a step can't close the block** (the block's fence is longer than any backtick run in it). A step's `working-directory` and `shell` are shown.
+- **A file that kept the banner but lost its markers keeps its hand-written sections;** the block is added at the top. Only a file of nothing but the tool's own sections is replaced.
+- **Folders:** git decides the list (a committed `dist/` is listed, submodules too); "used by" needs a path (`scripts/x`, `./scripts`), not a bare word, and a delete-only script doesn't count; notes that repeat the folder name (`docs/ — docs`) are gone.
+- **wrangler `main`:** top level only, comments ignored, either quote style; `wrangler.jsonc` is parsed.
+- **Entry points say what the manifest says:** `package entry (main)` / `(exports)`, not "library"; a bundled build isn't traced by file name (the built path is shown, with its build script); a file with a popular name and no manifest entry isn't listed (Cargo, Zig and Go defaults are, named as defaults); `exports` arrays and `rootDir: "."` are read.
+- **Contributing headings** keep `C#`, lose link URLs, at most six.
+- A description that starts like markup is escaped; a non-number script value no longer throws.
+
 **Upgrading from 0.1.0:** run `npx agents-md-facts` once. The output changed, so `--check` reports the old file as stale until you refresh it.
 
 ## 0.1.0

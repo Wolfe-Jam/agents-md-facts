@@ -10,6 +10,10 @@ export interface CiStep {
   if?: string;
   /** The step's `name:`, when it has one. */
   name?: string;
+  /** Where it runs, when not the repo root (`working-directory`, step or job default). */
+  dir?: string;
+  /** Its shell, when not the default (`shell:`, step or job default). */
+  shell?: string;
 }
 
 /** One job of a workflow that runs at least one command. */
@@ -20,7 +24,7 @@ export interface CiJob {
   if?: string;
   /** Where it runs: `runs-on` (a label set joined with `+`), or the matrix `os` values it names. */
   runsOn: string[];
-  /** Matrix axes with plain values, e.g. `node 22, 24` (`os` is in `runsOn`). */
+  /** Matrix axes with plain values, e.g. `node 22, 24` (`os` is in `runsOn`); `include: N` when it adds legs. */
   matrix: string[];
   steps: CiStep[];
 }
@@ -70,6 +74,7 @@ function readJob(id: string, job: Obj): CiJob | null {
     if (labels.length === ro.length && labels.length) runsOn = [labels.join('+')];
   }
 
+  const defaults = isObj(job.defaults) && isObj(job.defaults.run) ? job.defaults.run : {};
   const steps: CiStep[] = [];
   for (const step of Array.isArray(job.steps) ? job.steps : []) {
     if (!isObj(step)) continue;
@@ -80,6 +85,10 @@ function readJob(id: string, job: Obj): CiJob | null {
     if (cond) out.if = cond;
     const name = scalar(step.name);
     if (name) out.name = name;
+    const dir = scalar(step['working-directory']) ?? scalar(defaults['working-directory']);
+    if (dir && dir !== '.') out.dir = dir;
+    const shell = scalar(step.shell) ?? scalar(defaults.shell);
+    if (shell) out.shell = shell;
     steps.push(out);
   }
   if (!steps.length) return null;
@@ -88,7 +97,10 @@ function readJob(id: string, job: Obj): CiJob | null {
   const out: CiJob = {
     id,
     runsOn,
-    matrix: [...axes].filter(([k]) => k !== 'os').map(([k, v]) => `${k} ${v.join(', ')}`),
+    matrix: [
+      ...[...axes].filter(([k]) => k !== 'os').map(([k, v]) => `${k} ${v.join(', ')}`),
+      ...(Array.isArray(matrix.include) && matrix.include.length ? [`include: ${matrix.include.length} more`] : []),
+    ],
     steps,
   };
   if (cond) out.if = cond;

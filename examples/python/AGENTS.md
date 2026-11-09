@@ -1,5 +1,5 @@
 <!-- agents:from-facts:start -->
-<!-- authored by agents-md-facts — from your repo's facts, never guessed · re-run to refresh · keep the start/end markers · authored: 2026-11-09T22:10:50.536Z -->
+<!-- authored by agents-md-facts — from your repo's facts, never guessed · re-run to refresh · keep the start/end markers · authored: 2026-11-09T22:48:20.900Z -->
 
 # AGENTS.md — python
 
@@ -15,11 +15,7 @@ pytest
 
 ## Where things live
 
-- `tests/` — tests
-
-Entry points:
-
-- `main.py`
+- `tests/`
 
 ## Conventions
 

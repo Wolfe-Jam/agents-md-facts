@@ -3,6 +3,7 @@
  * the authored AGENTS.md say something false, guessed or unstable.
  */
 import { afterEach, describe, expect, test } from 'bun:test';
+import { execFileSync } from 'child_process';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'fs';
 import { tmpdir } from 'os';
 import { dirname, join } from 'path';
@@ -13,7 +14,7 @@ import { parseWorkflow } from '../src/detect/ci.ts';
 import { detectContributing } from '../src/detect/contributing.ts';
 import { detectPackageManager } from '../src/detect/orientation.ts';
 import { detectRelease } from '../src/detect/release.ts';
-import { extractBlock, wrapBlock } from '../src/inject.ts';
+import { extractBlock, injectBlock, wrapBlock } from '../src/inject.ts';
 
 const ROOT = join(import.meta.dir, '..');
 const dirs: string[] = [];
@@ -162,8 +163,8 @@ describe('R10 — a folder is used only when a script names its path', () => {
       'package.json': pkg({ scripts: { start: 'cross-env NODE_ENV=test node src/index.js', ci: 'bun test --coverage', release: './scripts/release.sh', prepare: 'node scripts/setup.js' } }),
       'test/a.js': '', 'scripts/release.sh': '', 'src/index.js': '',
     }));
-    expect(md).toContain('- `test/` — tests\n');
-    expect(md).toContain('- `scripts/` — scripts, used by `npm run release`, `npm run prepare`');
+    expect(md).toContain('- `test/`\n');
+    expect(md).toContain('- `scripts/` — used by `npm run release`, `npm run prepare`');
   });
 });
 
@@ -232,7 +233,7 @@ describe('R17 — entry points from tsconfig and nested exports', () => {
       'tsconfig.json': '{ "compilerOptions": { "outDir": "distribution", "rootDir": "source" } }',
       'source/index.ts': '',
     }));
-    expect(md).toContain('- `source/index.ts` — library entry');
+    expect(md).toContain('- `source/index.ts` — package entry (`exports`)');
   });
 });
 
@@ -242,5 +243,155 @@ describe('R19 — the default branch is not assumed', () => {
     expect(md).toContain('push to the default branch');
     expect(md).toContain('Branch off the default branch; never commit to it directly');
     expect(md).not.toContain('`main`');
+  });
+});
+
+/* ── The second review of #7 (goose): G-numbers are its finding numbers ── */
+
+describe('G3 — release and chore workflows are named, not copied', () => {
+  test('a publish workflow\'s steps stay out; its file is named', () => {
+    const wf = (on: string, run: string): string => `on: ${on}\njobs:\n  j:\n    runs-on: ubuntu-latest\n    steps:\n      - run: ${run}\n`;
+    const md = author(repo({
+      'package.json': pkg({}),
+      '.github/workflows/ci.yml': wf('pull_request', 'npm test'),
+      '.github/workflows/publish.yml': wf('release', 'npm publish'),
+      '.github/workflows/key.yml': wf('workflow_dispatch', 'gh secret set KEY'),
+    }));
+    expect(md).toContain('npm test');
+    expect(md).not.toContain('npm publish');
+    expect(md).not.toContain('gh secret set');
+    expect(md).toContain('Also: `.github/workflows/key.yml` (on workflow_dispatch) · `.github/workflows/publish.yml` (on release).');
+  });
+});
+
+describe('G4 — a fence inside a step can\'t close the block', () => {
+  test('the block\'s fence is longer than any backtick run in it', () => {
+    const md = author(repo({
+      'package.json': pkg({}),
+      '.github/workflows/ci.yml': 'on: push\njobs:\n  j:\n    runs-on: ubuntu-latest\n    steps:\n      - run: |\n          ```\n          ok\n      - run: echo "```"\n',
+    }));
+    expect(md).toContain('````bash\n');
+    expect(md).toContain('echo "```"\n````');
+  });
+});
+
+describe('G7 — a file that kept the banner but lost its markers keeps its text', () => {
+  test('hand-written sections survive; the block is added at the top', () => {
+    const dir = repo({
+      'package.json': pkg({}),
+      'AGENTS.md': '<!-- authored by agents-md-facts — from your repo\'s facts, never guessed -->\n\n# AGENTS.md — demo\n\n## Guardrails\n\n- x\n\n## Team notes\n\nNever touch billing/.\n',
+    });
+    injectBlock(join(dir, 'AGENTS.md'), author(dir));
+    const after = readFileSync(join(dir, 'AGENTS.md'), 'utf-8');
+    expect(after).toContain('Never touch billing/.');
+    expect(after.startsWith('<!-- agents:from-facts:start -->')).toBe(true);
+  });
+  test('a file of only the tool\'s own sections is still reclaimed', () => {
+    const dir = repo({ 'package.json': pkg({}), 'AGENTS.md': '<!-- authored by agents-md-facts — old -->\n\n# AGENTS.md — demo\n\n## Guardrails\n\n- x\n' });
+    injectBlock(join(dir, 'AGENTS.md'), author(dir));
+    expect(readFileSync(join(dir, 'AGENTS.md'), 'utf-8')).not.toContain('— old -->');
+  });
+});
+
+describe('G8b — git decides the folder list', () => {
+  test('a committed dist/ is listed (git tracks it); outside git it is skipped', () => {
+    const files = { 'package.json': pkg({}), 'dist/index.js': '', 'src/a.ts': '' };
+    const plain = author(repo(files));
+    expect(plain).not.toContain('`dist/`');
+    const dir = repo(files);
+    execFileSync('git', ['init', '-q'], { cwd: dir });
+    execFileSync('git', ['add', '.'], { cwd: dir });
+    expect(author(dir)).toContain('- `dist/`');
+  });
+});
+
+describe('G9 — wrangler main: top level, no comments', () => {
+  test('a commented line and an [env.*] main are ignored; single quotes read', () => {
+    const md = author(repo({
+      'package.json': pkg({}),
+      'wrangler.toml': "# main = \"old/index.ts\"\nname = \"x\"\nmain = 'worker/index.ts'\n\n[env.staging]\nmain = \"staging/index.ts\"\n",
+      'worker/index.ts': '', 'old/x': '', 'staging/x': '',
+    }));
+    expect(md).toContain('- `worker/` — Cloudflare Worker (`wrangler.toml` main: `worker/index.ts`)');
+    expect(md).toContain('- `old/`\n');
+    expect(md).toContain('- `staging/`\n');
+  });
+  test('wrangler.jsonc: comments stripped, top-level main only', () => {
+    const md = author(repo({
+      'package.json': pkg({}),
+      'wrangler.jsonc': '{\n  // "main": "old/index.ts",\n  "name": "x",\n  "main": "worker/index.ts",\n  "env": { "staging": { "main": "staging/index.ts" } },\n}\n',
+      'worker/index.ts': '', 'staging/x': '',
+    }));
+    expect(md).toContain('- `worker/` — Cloudflare Worker (`wrangler.jsonc` main: `worker/index.ts`)');
+    expect(md).toContain('- `staging/`\n');
+  });
+});
+
+describe('G10 — "used by" needs a path', () => {
+  test('`npm test`, `playwright test` and `rm -rf generated` use no folder', () => {
+    const md = author(repo({
+      'package.json': pkg({ scripts: { verify: 'npm run lint && npm test', 'test:e2e': 'playwright test', clean: 'rm -rf generated/', smoke: 'bash ./scripts/smoke.sh' } }),
+      'test/a.js': '', 'generated/x': '', 'scripts/smoke.sh': '',
+    }));
+    expect(md).toContain('- `test/`\n');
+    expect(md).toContain('- `generated/`\n');
+    expect(md).toContain('- `scripts/` — used by `npm run smoke`');
+  });
+});
+
+describe('G11 — entry points say what the manifest says', () => {
+  test('a bundled bin is not traced by name to a same-named source file', () => {
+    const md = author(repo({
+      'package.json': pkg({ bin: { x: 'dist/cli.js' }, scripts: { build: 'esbuild src/main.ts --bundle --outfile=dist/cli.js' } }),
+      'src/main.ts': '', 'src/cli.ts': '',
+    }));
+    expect(md).toContain('- `dist/cli.js` — the `x` command (built by `npm run build`)');
+    expect(md).not.toContain('`src/cli.ts` — the');
+  });
+  test('`main` is a package entry, not a "library"; an exports array is read', () => {
+    expect(author(repo({ 'package.json': pkg({ main: 'dist/extension.js' }), 'src/extension.ts': '' })))
+      .toContain('- `src/extension.ts` — package entry (`main`)');
+    expect(author(repo({ 'package.json': pkg({ exports: { '.': ['./dist/a.js'] }, main: 'dist/index.js' }), 'src/a.ts': '', 'src/index.ts': '' })))
+      .toContain('- `src/a.ts` — package entry (`exports`)');
+  });
+  test('rootDir "." (dist/src/index.js) is traced', () => {
+    expect(author(repo({ 'package.json': pkg({ main: 'dist/src/index.js' }), 'tsconfig.json': '{"compilerOptions":{"outDir":"dist"}}', 'src/index.ts': '' })))
+      .toContain('- `src/index.ts` — package entry (`main`)');
+  });
+  test('a file with a popular name and no manifest entry is not listed', () => {
+    expect(author(repo({ 'package.json': pkg({}), 'src/index.ts': '' }))).not.toContain('Entry points');
+  });
+});
+
+describe('G16 — no folder notes that repeat the name', () => {
+  test('`docs/`, `tests/`, `examples/`, `scripts/` get no gloss', () => {
+    const md = author(repo({ 'package.json': pkg({}), 'docs/a.md': '', 'tests/a': '', 'examples/a': '', 'scripts/a': '', 'migrations/1.sql': '' }));
+    expect(md).toContain('- `docs/`\n- `examples/`\n- `migrations/` — database migrations\n- `scripts/`\n- `tests/`');
+  });
+});
+
+describe('G17 — contributing headings as plain text', () => {
+  test('`## Why C#` keeps its #; links keep their text; at most six shown', () => {
+    const md = author(repo({
+      'package.json': pkg({}),
+      'CONTRIBUTING.md': '## Why C#\n## Use [Langfuse](https://x.y)\n## A ##\n## B\n## C\n## D\n## E\n',
+    }));
+    expect(md).toContain('- Follow `CONTRIBUTING.md` (Why C# · Use Langfuse · A · B · C · D · …).');
+  });
+});
+
+describe('G18/G19 — odd manifests', () => {
+  test('a non-string script doesn\'t throw', () => {
+    expect(() => author(repo({ 'package.json': JSON.stringify({ name: 'x', scripts: { prepack: 1, test: 'node --test' } }) }))).not.toThrow();
+  });
+  test('a description that starts like markup stays text', () => {
+    expect(author(repo({ 'package.json': pkg({ description: '# not a heading' }) }))).toContain('\n\\# not a heading\n');
+  });
+});
+
+describe('G15 — a step\'s directory and shell are shown', () => {
+  test('working-directory and shell from the step or the job default', () => {
+    const { jobs } = parseWorkflow('on: push\njobs:\n  j:\n    runs-on: windows-latest\n    defaults:\n      run:\n        shell: pwsh\n    steps:\n      - run: ../mcp-publisher publish server.json\n        working-directory: sibling\n');
+    expect(jobs[0]?.steps).toEqual([{ run: '../mcp-publisher publish server.json', dir: 'sibling', shell: 'pwsh' }]);
   });
 });

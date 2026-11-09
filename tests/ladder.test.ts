@@ -152,17 +152,18 @@ describe('A6 — where things live', () => {
     });
     const md = author(dir);
     expect(md).toContain('- `schema/`\n');
-    expect(md).toContain('- `scripts/` — scripts, used by `npm run smoke`');
-    expect(md).toContain('- `test/` — tests, used by `npm test`');
-    expect(md).toContain('- `worker/` — Cloudflare Worker (`wrangler.jsonc` main: `worker/index.ts`), used by `npm run typecheck`');
+    expect(md).toContain('- `scripts/` — used by `npm run smoke`');
+    expect(md).toContain('- `test/` — used by `npm test`');
+    // `-p worker` is a bare word, not a path: no "used by" claim from it.
+    expect(md).toContain('- `worker/` — Cloudflare Worker (`wrangler.jsonc` main: `worker/index.ts`)\n');
     expect(md).toContain('- `src/cli.ts` — the `card-check` and `mcp-card-check` commands');
-    expect(md).toContain('- `src/lib.ts` — library entry');
+    expect(md).toContain('- `src/lib.ts` — package entry (`exports`)');
     expect(md).not.toContain('`dist/`');
     expect(md).not.toContain('node_modules');
   });
-  test('no manifest entry → the conventional entry files that exist', () => {
+  test('no manifest entry → the toolchain\'s own default, named as such', () => {
     const md = author(repo({ 'Cargo.toml': '[package]\nname = "x"\n', 'src/main.rs': '' }));
-    expect(md).toContain('Entry points:\n\n- `src/main.rs`');
+    expect(md).toContain('Entry points:\n\n- `src/main.rs` — binary crate root (Cargo default)');
   });
 });
 

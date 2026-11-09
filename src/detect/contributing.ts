@@ -4,7 +4,7 @@ import { join } from 'path';
 /** A contributing guide: where it is and its section headings. */
 export interface DetectedContributing {
   file: string;
-  /** The guide's `##` headings, in order — what it covers, not what it says. */
+  /** The guide's `##` headings as plain text, in order — what it covers, not what it says. */
   sections: string[];
 }
 
@@ -30,8 +30,9 @@ export function detectContributing(dir: string): DetectedContributing | null {
         continue;
       }
       if (fence !== null) continue;
-      const h = /^##\s+(.+?)\s*#*\s*$/.exec(line)?.[1];
-      if (h) sections.push(h.trim());
+      // A closing `#` run needs a space before it (`## Why C#` keeps its `#`); links keep their text.
+      const h = /^##\s+(.+?)(?:\s+#+)?\s*$/.exec(line)?.[1];
+      if (h) sections.push(h.replace(/\[([^\]]*)\]\([^)]*\)/g, '$1').replace(/[`*_]/g, '').trim());
     }
     return { file, sections };
   }

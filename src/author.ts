@@ -12,25 +12,32 @@ const CI_BUDGET = 40;
 /** Events that make a workflow a check on changes, not a release or a chore. */
 const CHECK_EVENTS = new Set(['push', 'pull_request', 'pull_request_target', 'merge_group']);
 
-/** One workflow as a fenced block: a header line per job, then its steps (first line of each). */
+/** A code fence longer than any backtick run inside the block, so the block can't close early. */
+function fenceFor(lines: string[]): string {
+  const longest = Math.max(0, ...lines.map((l) => Math.max(0, ...(l.match(/`+/g) ?? []).map((m) => m.length))));
+  return '`'.repeat(Math.max(3, longest + 1));
+}
+
+/** One workflow as a fenced block: a header line per job, then its steps (a script by its name). */
 function workflowLines(wf: DetectedWorkflow): string[] {
-  const out = ['```bash'];
+  const body: string[] = [];
   for (const job of wf.jobs) {
     const where = [...job.runsOn.length ? [job.runsOn.join(', ')] : [], ...job.matrix];
-    out.push(`# job ${job.id}${job.if ? ` · if: ${job.if}` : ''}${where.length ? ` · ${where.join(' · ')}` : ''}`);
+    body.push(`# job ${job.id}${job.if ? ` · if: ${job.if}` : ''}${where.length ? ` · ${where.join(' · ')}` : ''}`);
     for (const step of job.steps) {
-      if (step.if) out.push(`# if: ${step.if}`);
+      const notes = [...step.if ? [`if: ${step.if}`] : [], ...step.dir ? [`in ${step.dir}/`] : [], ...step.shell ? [`shell: ${step.shell}`] : []];
+      if (notes.length) body.push(`# ${notes.join(' · ')}`);
       const lines = step.run.split('\n');
-      if (lines.length === 1) { out.push(step.run); continue; }
+      if (lines.length === 1) { body.push(step.run); continue; }
       // A script: its name says what it does; else its first line that isn't shell setup.
-      if (step.name) { out.push(`# ${step.name} (${lines.length}-line script in the file)`); continue; }
+      if (step.name) { body.push(`# ${step.name} (${lines.length}-line script in the file)`); continue; }
       const first = lines.find((l) => l.trim() && !/^\s*(set -|#)/.test(l)) ?? lines[0] ?? '';
-      out.push(first);
-      out.push(`# … ${lines.length - 1} more line${lines.length > 2 ? 's' : ''} in this step`);
+      body.push(first);
+      body.push(`# … ${lines.length - 1} more line${lines.length > 2 ? 's' : ''} in this step`);
     }
   }
-  out.push('```');
-  return out;
+  const fence = fenceFor(body);
+  return [`${fence}bash`, ...body, fence];
 }
 
 /**
@@ -103,7 +110,8 @@ export function authorAgentsMd(ctx: RepoContext, now: Date = new Date()): string
   push(`# AGENTS.md — ${ctx.name}`);
   push();
   if (ctx.description) {
-    push(ctx.description);
+    // Plain text: a description that starts like markup (`#`, `<`, `-`) mustn't become it.
+    push(/^[#<>\-*+|]/.test(ctx.description) ? `\\${ctx.description}` : ctx.description);
     push();
   }
   const orientation = orientationLine(ctx);
@@ -157,10 +165,13 @@ export function authorAgentsMd(ctx: RepoContext, now: Date = new Date()): string
     push();
   }
 
-  // §3c CI — what the workflows run, so CI-only checks aren't a surprise
-  const ci = [...(ctx.ci ?? [])].sort((a, b) =>
-    Number(!a.on.some((e) => CHECK_EVENTS.has(e))) - Number(!b.on.some((e) => CHECK_EVENTS.has(e))));
-  if (ci.length) {
+  // §3c CI — what the checks on a change run, so CI-only checks aren't a surprise.
+  // Release, schedule and manual workflows are named, not copied: an agent verifying
+  // a change has no business running a publish or a secret-setting script.
+  const allCi = ctx.ci ?? [];
+  const ci = allCi.filter((wf) => wf.on.some((e) => CHECK_EVENTS.has(e)));
+  const named = allCi.filter((wf) => !ci.includes(wf));
+  if (allCi.length) {
     push('## CI');
     push();
     let used = 0;
@@ -169,13 +180,14 @@ export function authorAgentsMd(ctx: RepoContext, now: Date = new Date()): string
       const header = `\`${wf.file}\`${wf.on.length ? ` (on ${wf.on.join(', ')})` : ''}`;
       let block = workflowLines(wf);
       if (used > 0 && used + block.length + 2 > CI_BUDGET) { rest.push(header); continue; }
-      if (block.length > CI_BUDGET) block = [...block.slice(0, CI_BUDGET - 2), '# … more in the file', '```'];
+      if (block.length > CI_BUDGET) block = [...block.slice(0, CI_BUDGET - 2), '# … more in the file', block[block.length - 1] ?? '```'];
       push(header);
       push();
       for (const l of block) push(l);
       push();
       used += block.length + 2;
     }
+    for (const wf of named) rest.push(`\`${wf.file}\`${wf.on.length ? ` (on ${wf.on.join(', ')})` : ''}`);
     if (rest.length) {
       push(`Also: ${rest.join(' · ')}.`);
       push();
@@ -246,7 +258,8 @@ export function authorAgentsMd(ctx: RepoContext, now: Date = new Date()): string
     push('## Commit & PR');
     push();
     if (ctx.contributing) {
-      const covers = ctx.contributing.sections.length ? ` (${ctx.contributing.sections.join(' · ')})` : '';
+      const secs = ctx.contributing.sections;
+      const covers = secs.length ? ` (${secs.slice(0, 6).join(' · ')}${secs.length > 6 ? ' · …' : ''})` : '';
       push(`- Follow \`${ctx.contributing.file}\`${covers}.`);
     }
     if (ctx.isGitRepo) {

@@ -1,5 +1,5 @@
 <!-- agents:from-facts:start -->
-<!-- authored by agents-md-facts — from your repo's facts, never guessed · re-run to refresh · keep the start/end markers · authored: 2026-11-09T22:10:50.971Z -->
+<!-- authored by agents-md-facts — from your repo's facts, never guessed · re-run to refresh · keep the start/end markers · authored: 2026-11-09T22:48:21.341Z -->
 
 # AGENTS.md — agents-md-facts
 
@@ -47,15 +47,15 @@ bun run src/cli.ts --check
 
 ## Where things live
 
-- `docs/` — docs
-- `examples/` — examples
-- `src/` — source, used by `bun run dev`, `bun run lint`
-- `tests/` — tests
+- `docs/`
+- `examples/`
+- `src/` — used by `bun run dev`
+- `tests/`
 
 Entry points:
 
 - `src/cli.ts` — the `agents-md-facts` command
-- `src/index.ts` — library entry
+- `src/index.ts` — package entry (`exports`)
 
 ## Conventions
 

@@ -15,7 +15,7 @@ Hand-written agent files **rot**. LLM-written ones often **bloat** and can *redu
 ```bash
 npx agents-md-facts            # author/refresh AGENTS.md (non-destructive; skip write if facts unchanged)
 npx agents-md-facts --check    # exit 1 if missing or stale
-npx agents-md-facts --dry-run  # print plan; write nothing
+npx agents-md-facts --dry-run  # print the block it would write; write nothing
 npx agents-md-facts --stdout   # emit managed block to stdout
 ```
 
@@ -27,9 +27,9 @@ Everything you write outside those markers is preserved. Keep the markers when y
 
 ## What it authors
 
-Description and orientation (language, kind, Node version) · setup & build · tests · before a release (what `npm publish` runs first: `prepublishOnly`, `prepack`) · CI (each workflow's jobs and steps, checks on push and pull requests first) · where things live (folders and entry points) · conventions · guardrails · definition of done · security (if secrets files exist) · commit & PR (with a pointer to your contributing guide).
+Description and orientation (language, kind, Node version) · setup & build · tests · before a release (what `npm publish` runs first: `prepublishOnly`, `prepack`) · CI (the jobs and steps of the GitHub Actions workflows that run on push and pull requests; the others are named) · where things live (folders and entry points) · conventions · guardrails · definition of done · security (if secrets files exist) · commit & PR (with a pointer to your contributing guide).
 
-Each section appears only when the repo has something for it.
+Guardrails and Definition of Done always appear; every other section only when the repo has something for it.
 
 Every line is a **detected fact** or a **curated default**. If it resolves no ambiguity, it is dropped.
 

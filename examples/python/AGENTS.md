@@ -1,11 +1,11 @@
 <!-- agents:from-facts:start -->
-<!-- authored by agents-md-facts — from your repo's facts, never guessed · re-run to refresh · authored: 2026-08-20T03:08:41.990Z -->
+<!-- authored by agents-md-facts — from your repo's facts, never guessed · re-run to refresh · keep the start/end markers · authored: 2026-11-09T21:13:54.068Z -->
 
 # AGENTS.md — python
 
 Python
 
-*Authored: 2026-08-20*
+*Authored: 2026-11-09*
 
 ## Run the tests
 
@@ -15,9 +15,11 @@ pytest
 
 ## Where things live
 
-- `pyproject.toml`
+- `tests/` — tests
+
+Entry points:
+
 - `main.py`
-- `tests/`
 
 ## Conventions
 

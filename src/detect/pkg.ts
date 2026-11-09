@@ -21,6 +21,7 @@ export interface PackageJson {
   private?: boolean;
   workspaces?: string[] | { packages?: string[] };
   files?: string[];
+  engines?: Record<string, string>;
 }
 
 /** Read and parse package.json from a directory. Returns null if absent/invalid. */

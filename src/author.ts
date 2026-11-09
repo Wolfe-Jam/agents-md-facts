@@ -1,4 +1,8 @@
 import type { RepoContext } from './context.js';
+import { isBuildScript, scriptCommand } from './detect/commands.js';
+
+/** CI steps shown per workflow before pointing to the file for the rest. */
+const CI_STEPS = 12;
 
 /**
  * The banner written at the top of the managed block. It says what authored the
@@ -7,7 +11,7 @@ import type { RepoContext } from './context.js';
  * Excluded from the `--check` equality diff — see `stripVolatile` in cli.ts.
  */
 function banner(now: Date): string {
-  return `<!-- authored by agents-md-facts — from your repo's facts, never guessed · re-run to refresh · authored: ${now.toISOString()} -->`;
+  return `<!-- authored by agents-md-facts — from your repo's facts, never guessed · re-run to refresh · keep the start/end markers · authored: ${now.toISOString()} -->`;
 }
 
 /** Human-readable companion to the banner's ISO timestamp — visible while reading, not just parseable. */
@@ -32,7 +36,9 @@ function orientationLine(ctx: RepoContext): string {
   const parts: string[] = [];
   if (ctx.language !== 'Unknown') parts.push(ctx.language);
   if (ctx.kind) parts.push(ctx.kind);
-  if (ctx.runtime !== 'Unknown' && ctx.runtime !== ctx.language) parts.push(ctx.runtime);
+  if (ctx.runtime !== 'Unknown' && ctx.runtime !== ctx.language) {
+    parts.push(ctx.runtime === 'Node.js' && ctx.nodeVersion ? `Node.js ${ctx.nodeVersion}` : ctx.runtime);
+  }
   if (ctx.hasNodeManifest) parts.push(`${ctx.packageManager} package manager`);
   if (ctx.version) parts.push(`v${ctx.version}`);
   return parts.join(' · ');
@@ -57,7 +63,7 @@ export function authorAgentsMd(ctx: RepoContext, now: Date = new Date()): string
   const lintCmds = entries.filter(([k]) => /lint|check/i.test(k) && !/test/i.test(k));
   const setupCmds = entries.filter(([k]) => !/test|lint|check/i.test(k));
   const testCmd = testCmds[0]?.[1];
-  const buildCmd = setupCmds.find(([k]) => k === 'build')?.[1];
+  const buildCmd = setupCmds.find(([k]) => isBuildScript(k))?.[1];
   // Full verify list for "Run the tests" (tests first, then lint/typecheck)
   const verifyCmds = [...testCmds, ...lintCmds];
 
@@ -66,6 +72,10 @@ export function authorAgentsMd(ctx: RepoContext, now: Date = new Date()): string
   push();
   push(`# AGENTS.md — ${ctx.name}`);
   push();
+  if (ctx.description) {
+    push(ctx.description);
+    push();
+  }
   const orientation = orientationLine(ctx);
   if (orientation) {
     push(orientation);
@@ -98,11 +108,53 @@ export function authorAgentsMd(ctx: RepoContext, now: Date = new Date()): string
     push();
   }
 
-  // §4 Where things live
-  if (ctx.keyFiles.length) {
+  // §3b Before a release — the gate the manifest declares
+  if (ctx.release) {
+    push('## Before a release');
+    push();
+    push(ctx.release.hook
+      ? `Publishing runs \`${ctx.release.name}\` first:`
+      : `\`${scriptCommand(ctx.packageManager, 'release')}\` runs:`);
+    push();
+    push('```bash');
+    push(ctx.release.command);
+    push('```');
+    push();
+  }
+
+  // §3c CI — what the workflows run, so CI-only checks aren't a surprise
+  const ci = ctx.ci ?? [];
+  if (ci.length) {
+    push('## CI');
+    push();
+    for (const wf of ci) {
+      push([`\`${wf.file}\``, ...(wf.on.length ? [wf.on.join(' · ')] : [])].join(' · '));
+      push();
+      push('```bash');
+      for (const step of wf.steps.slice(0, CI_STEPS)) {
+        if (step.if) push(`# if: ${step.if}`);
+        push(step.run);
+      }
+      if (wf.steps.length > CI_STEPS) push(`# … ${wf.steps.length - CI_STEPS} more steps in the file`);
+      push('```');
+      push();
+    }
+  }
+
+  // §4 Where things live — folders and entry points, each with what the repo says it is
+  // (A hand-built context without `layout` keeps the older flat list of key files.)
+  const { folders, entries: entryPoints } = ctx.layout
+    ?? { folders: [], entries: ctx.keyFiles.map((path) => ({ path, note: null })) };
+  if (folders.length || entryPoints.length) {
     push('## Where things live');
     push();
-    for (const f of ctx.keyFiles) push(`- \`${f}\``);
+    for (const f of folders) push(f.note ? `- \`${f.path}\` — ${f.note}` : `- \`${f.path}\``);
+    if (entryPoints.length) {
+      if (folders.length) push();
+      push('Entry points:');
+      push();
+      for (const e of entryPoints) push(e.note ? `- \`${e.path}\` — ${e.note}` : `- \`${e.path}\``);
+    }
     push();
   }
 
@@ -149,12 +201,18 @@ export function authorAgentsMd(ctx: RepoContext, now: Date = new Date()): string
   }
 
   // §9 Commit & PR — a sane static default (a repo without git has no PRs)
-  if (ctx.isGitRepo) {
+  if (ctx.isGitRepo || ctx.contributing) {
     push('## Commit & PR');
     push();
-    push('- Write a clear, descriptive commit message.');
-    push('- Branch off `main`; never commit to `main` directly — open a PR for review.');
-    push('- If build/test scripts or layout change, refresh this file in the **same PR** (`npx agents-md-facts`).');
+    if (ctx.contributing) {
+      const covers = ctx.contributing.sections.length ? ` (${ctx.contributing.sections.join(' · ')})` : '';
+      push(`- Follow \`${ctx.contributing.file}\`${covers}.`);
+    }
+    if (ctx.isGitRepo) {
+      push('- Write a clear, descriptive commit message.');
+      push('- Branch off `main`; never commit to `main` directly — open a PR for review.');
+      push('- If build/test scripts or layout change, refresh this file in the **same PR** (`npx agents-md-facts`).');
+    }
     push();
   }
 

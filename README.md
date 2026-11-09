@@ -23,11 +23,13 @@ Refresh only the block between:
 
 `<!-- agents:from-facts:start -->` … `<!-- agents:from-facts:end -->`
 
-Everything you write outside those markers is preserved.
+Everything you write outside those markers is preserved. Keep the markers when you edit or merge the file: a refresh finds its block by them.
 
 ## What it authors
 
-Orientation · setup & build · tests · where things live · conventions · guardrails · definition of done · security (if secrets files exist) · commit & PR.
+Description and orientation (language, kind, Node version) · setup & build · tests · before a release (the `prepublishOnly` chain) · CI (what your workflows run) · where things live (folders and entry points) · conventions · guardrails · definition of done · security (if secrets files exist) · commit & PR (with a pointer to your contributing guide).
+
+Each section appears only when the repo has something for it.
 
 Every line is a **detected fact** or a **curated default**. If it resolves no ambiguity, it is dropped.
 

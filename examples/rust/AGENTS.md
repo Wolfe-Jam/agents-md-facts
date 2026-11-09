@@ -1,11 +1,11 @@
 <!-- agents:from-facts:start -->
-<!-- authored by agents-md-facts — from your repo's facts, never guessed · re-run to refresh · authored: 2026-08-20T03:08:42.048Z -->
+<!-- authored by agents-md-facts — from your repo's facts, never guessed · re-run to refresh · keep the start/end markers · authored: 2026-11-09T21:13:54.198Z -->
 
 # AGENTS.md — rust
 
 Rust
 
-*Authored: 2026-08-20*
+*Authored: 2026-11-09*
 
 ## Setup & build
 
@@ -22,7 +22,10 @@ cargo clippy
 
 ## Where things live
 
-- `Cargo.toml`
+- `src/` — source
+
+Entry points:
+
 - `src/main.rs`
 
 ## Conventions

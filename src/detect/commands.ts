@@ -3,7 +3,48 @@ import { join } from 'path';
 import type { PackageJson } from './pkg.js';
 
 /**
- * Detect build/test/lint/dev/start commands from the repo.
+ * The scripts an agent runs to build, verify and develop, by role. A script is
+ * picked by its name, so a renamed one (`compile` for `build`) is still found.
+ * Order: build, test, lint/typecheck, dev — then package.json order within a role.
+ */
+const ROLES: RegExp[] = [
+  /^(build|compile|bundle)$/,
+  /^test(:.+)?$/,
+  /^(lint(:.+)?|typecheck|type-check|check-types|format:check|check)$/,
+  /^(dev|start|serve)$/,
+];
+
+/** True for a script name that plays the build role (`build`, `compile`, `bundle`). */
+export function isBuildScript(name: string): boolean {
+  return /^(build|compile|bundle)$/.test(name);
+}
+
+/**
+ * How this repo runs a package.json script, in its own package manager's
+ * spelling: `npm test` and `npm start` (npm's own shorthands), `npm run x`
+ * otherwise; `bun run x` (bare `bun test` runs Bun's test runner, not the
+ * script); `pnpm` and `yarn` the same as npm.
+ */
+export function scriptCommand(pm: string, name: string): string {
+  const short = name === 'test' || name === 'start';
+  switch (pm) {
+    case 'bun': return `bun run ${name}`;
+    case 'pnpm': return short ? `pnpm ${name}` : `pnpm run ${name}`;
+    case 'yarn': return short ? `yarn ${name}` : `yarn run ${name}`;
+    default: return short ? `npm ${name}` : `npm run ${name}`;
+  }
+}
+
+/** The package manager a Node repo uses, from its lockfile (npm when there is none). */
+export function nodePackageManager(dir: string): string {
+  if (existsSync(join(dir, 'bun.lock')) || existsSync(join(dir, 'bun.lockb'))) return 'bun';
+  if (existsSync(join(dir, 'pnpm-lock.yaml'))) return 'pnpm';
+  if (existsSync(join(dir, 'yarn.lock'))) return 'yarn';
+  return 'npm';
+}
+
+/**
+ * Detect build/test/lint/dev commands from the repo.
  *
  * Reads package.json scripts first (most reliable), then falls back to the
  * canonical defaults of whatever toolchain manifest is present (Cargo, Zig,
@@ -14,15 +55,10 @@ export function detectCommands(dir: string, pkg: PackageJson | null): Record<str
 
   // From package.json scripts (most reliable)
   if (pkg?.scripts) {
-    // Prefer exact script names that agents run to verify work (incl. typecheck).
-    for (const key of ['build', 'test', 'lint', 'typecheck', 'dev', 'start']) {
-      if (pkg.scripts[key]) {
-        // Determine the runner — prefer bun if a bun lockfile is present, else npm
-        const runner = existsSync(join(dir, 'bun.lock')) || existsSync(join(dir, 'bun.lockb'))
-          ? 'bun run'
-          : 'npm run';
-        commands[key] = `${runner} ${key}`;
-      }
+    const pm = nodePackageManager(dir);
+    const names = Object.keys(pkg.scripts).filter((k) => typeof pkg.scripts?.[k] === 'string' && pkg.scripts[k].trim());
+    for (const role of ROLES) {
+      for (const k of names) if (role.test(k)) commands[k] = scriptCommand(pm, k);
     }
   }
 

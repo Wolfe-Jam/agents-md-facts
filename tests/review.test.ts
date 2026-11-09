@@ -47,8 +47,8 @@ jobs:
       - run: npx wrangler deploy
 `);
     expect(jobs).toEqual([
-      { id: 'test', runsOn: ['ubuntu-latest'], matrix: [], steps: [{ run: 'npm test' }] },
-      { id: 'deploy', if: "github.ref == 'refs/heads/main'", runsOn: ['ubuntu-latest'], matrix: [], steps: [{ run: 'npx wrangler deploy' }] },
+      { id: 'test', runsOn: ['ubuntu-latest'], matrix: [], steps: [{ run: 'npm test' }], skipped: 0 },
+      { id: 'deploy', if: "github.ref == 'refs/heads/main'", runsOn: ['ubuntu-latest'], matrix: [], steps: [], skipped: 1 },
     ]);
   });
 });
@@ -150,10 +150,10 @@ jobs:
   });
   test('runners and matrix belong to their job; a label set is one runner', () => {
     expect(jobs[0]?.matrix).toEqual(['node-version 18, 20']);
-    expect(jobs[1]).toEqual({ id: 'lint', runsOn: ['self-hosted+linux+x64'], matrix: [], steps: [{ run: 'npm run lint' }] });
+    expect(jobs[1]).toEqual({ id: 'lint', runsOn: ['self-hosted+linux+x64'], matrix: [], steps: [{ run: 'npm run lint' }], skipped: 0 });
   });
   test('broken YAML adds nothing', () => {
-    expect(parseWorkflow('jobs: [unclosed')).toEqual({ on: [], jobs: [] });
+    expect(parseWorkflow('jobs: [unclosed')).toEqual({ on: [], checksChanges: false, jobs: [], unreadable: true });
   });
 });
 
@@ -176,17 +176,17 @@ describe('R11 — no guessed folder names', () => {
     expect(plain).toContain('- `spec/`\n');
     const ws = author(repo({ 'package.json': pkg({ workspaces: ['packages/*'] }), 'packages/a/index.js': '', 'pnpm-workspace.yaml': "packages:\n  - 'packages/*'\n" }));
     expect(ws).toContain('- `packages/` — workspace packages');
-    expect(ws).toContain('- `pnpm-workspace.yaml` — workspace config');
+    expect(ws).toContain('- `pnpm-workspace.yaml` — pnpm workspace config');
   });
 });
 
 describe('R12 — the command name npm installs', () => {
   test('a scoped package\'s string bin installs without the scope', () => {
-    expect(author(repo({ 'package.json': JSON.stringify({ name: '@faf/tool', bin: 'dist/cli.js' }), 'src/cli.ts': '' })))
+    expect(author(repo({ 'package.json': JSON.stringify({ name: '@faf/tool', bin: 'dist/cli.js' }), 'tsconfig.json': '{"compilerOptions":{"outDir":"dist"}}', 'src/cli.ts': '' })))
       .toContain('- `src/cli.ts` — the `tool` command');
   });
   test('no name → no invented command name', () => {
-    expect(author(repo({ 'package.json': JSON.stringify({ bin: 'dist/cli.js' }), 'src/cli.ts': '' })))
+    expect(author(repo({ 'package.json': JSON.stringify({ bin: 'dist/cli.js' }), 'tsconfig.json': '{"compilerOptions":{"outDir":"dist"}}', 'src/cli.ts': '' })))
       .toContain("- `src/cli.ts` — the package's command (`bin`)");
   });
 });
@@ -286,10 +286,10 @@ describe('G7 — a file that kept the banner but lost its markers keeps its text
     expect(after).toContain('Never touch billing/.');
     expect(after.startsWith('<!-- agents:from-facts:start -->')).toBe(true);
   });
-  test('a file of only the tool\'s own sections is still reclaimed', () => {
+  test('an old tool output that differs from today\'s is kept too (it may hold edits)', () => {
     const dir = repo({ 'package.json': pkg({}), 'AGENTS.md': '<!-- authored by agents-md-facts — old -->\n\n# AGENTS.md — demo\n\n## Guardrails\n\n- x\n' });
-    injectBlock(join(dir, 'AGENTS.md'), author(dir));
-    expect(readFileSync(join(dir, 'AGENTS.md'), 'utf-8')).not.toContain('— old -->');
+    expect(injectBlock(join(dir, 'AGENTS.md'), author(dir))).toBe('kept');
+    expect(readFileSync(join(dir, 'AGENTS.md'), 'utf-8')).toContain('— old -->');
   });
 });
 
@@ -349,9 +349,9 @@ describe('G11 — entry points say what the manifest says', () => {
     expect(md).not.toContain('`src/cli.ts` — the');
   });
   test('`main` is a package entry, not a "library"; an exports array is read', () => {
-    expect(author(repo({ 'package.json': pkg({ main: 'dist/extension.js' }), 'src/extension.ts': '' })))
+    expect(author(repo({ 'package.json': pkg({ main: 'dist/extension.js' }), 'tsconfig.json': '{"compilerOptions":{"outDir":"dist"}}', 'src/extension.ts': '' })))
       .toContain('- `src/extension.ts` — package entry (`main`)');
-    expect(author(repo({ 'package.json': pkg({ exports: { '.': ['./dist/a.js'] }, main: 'dist/index.js' }), 'src/a.ts': '', 'src/index.ts': '' })))
+    expect(author(repo({ 'package.json': pkg({ exports: { '.': ['./dist/a.js'] }, main: 'dist/index.js' }), 'tsconfig.json': '{"compilerOptions":{"outDir":"dist"}}', 'src/a.ts': '', 'src/index.ts': '' })))
       .toContain('- `src/a.ts` — package entry (`exports`)');
   });
   test('rootDir "." (dist/src/index.js) is traced', () => {
@@ -391,7 +391,7 @@ describe('G18/G19 — odd manifests', () => {
 
 describe('G15 — a step\'s directory and shell are shown', () => {
   test('working-directory and shell from the step or the job default', () => {
-    const { jobs } = parseWorkflow('on: push\njobs:\n  j:\n    runs-on: windows-latest\n    defaults:\n      run:\n        shell: pwsh\n    steps:\n      - run: ../mcp-publisher publish server.json\n        working-directory: sibling\n');
-    expect(jobs[0]?.steps).toEqual([{ run: '../mcp-publisher publish server.json', dir: 'sibling', shell: 'pwsh' }]);
+    const { jobs } = parseWorkflow('on: push\njobs:\n  j:\n    runs-on: windows-latest\n    defaults:\n      run:\n        shell: pwsh\n    steps:\n      - run: npm run lint\n        working-directory: ./sibling/\n');
+    expect(jobs[0]?.steps).toEqual([{ run: 'npm run lint', dir: 'sibling', shell: 'pwsh' }]);
   });
 });

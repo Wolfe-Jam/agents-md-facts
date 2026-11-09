@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 import { join } from 'path';
 import { authorAgentsMd } from './author.js';
-import { buildRepoContext } from './context.js';
+import { buildRepoContext, type RepoContext } from './context.js';
+import { GitUnreadableError } from './detect/git.js';
 import { extractBlock, injectBlock, wrapBlock } from './inject.js';
 import { stripVolatile } from './volatile.js';
 
@@ -27,7 +28,16 @@ function main(): void {
 
   const dir = process.cwd();
   const target = join(dir, 'AGENTS.md');
-  const ctx = buildRepoContext(dir);
+  let ctx: RepoContext;
+  try {
+    ctx = buildRepoContext(dir);
+  } catch (e) {
+    if (e instanceof GitUnreadableError) {
+      process.stderr.write(`${e.message}\n`);
+      process.exit(2);
+    }
+    throw e;
+  }
   const block = authorAgentsMd(ctx);
 
   // --check: fail if missing or drifted from repo facts.
@@ -59,7 +69,13 @@ function main(): void {
     process.stderr.write('AGENTS.md already matches facts — write skipped.\n');
     return;
   }
-  injectBlock(target, block);
+  const result = injectBlock(target, block);
+  if (result === 'kept') {
+    process.stderr.write(
+      'AGENTS.md had this tool\'s banner but no start/end markers, and text that may be yours. ' +
+      'The new block is at the top; nothing was removed. Delete the old copy below it when you\'ve kept what you need.\n',
+    );
+  }
   process.stderr.write(`AGENTS.md authored from facts → ${target}\n`);
 }
 

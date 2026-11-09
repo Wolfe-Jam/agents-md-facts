@@ -1,16 +1,31 @@
 import type { RepoContext } from './context.js';
 import { isBuildScript, isGateScript } from './detect/commands.js';
-import type { DetectedWorkflow } from './detect/ci.js';
+import type { CiJob, DetectedWorkflow } from './detect/ci.js';
 
 /**
- * Lines the CI section may use. A repo with many workflows gets the ones that
- * run on push / pull_request first; the rest are named by file, so the whole
- * file stays short (the doctrine test caps it at 150 lines).
+ * Lines the CI section may use, so the whole file stays short (the doctrine
+ * test caps it at 150 lines). The most important workflow always gets a block;
+ * the rest share what's left, then are named.
  */
 const CI_BUDGET = 40;
 
-/** Events that make a workflow a check on changes, not a release or a chore. */
-const CHECK_EVENTS = new Set(['push', 'pull_request', 'pull_request_target', 'merge_group']);
+/** Fewest lines worth giving a second workflow; below that it is named instead. */
+const CI_MIN_BLOCK = 8;
+
+/** Workflows named on the "Also:" line before the count takes over. */
+const ALSO_MAX = 6;
+
+/** Rank a workflow: the repo's main check first (`ci.yml`, `test.yml`, …), then pull-request ones. */
+function rank(wf: DetectedWorkflow): [number, number, string] {
+  const base = wf.file.replace(/^.*\//, '').replace(/\.ya?ml$/, '').toLowerCase();
+  const main = /^(ci|tests?|checks?|build|lint|main|verify|validate|pr)$/.test(base) ? 0
+    : /(^|[-_.])(ci|tests?|checks?|lint|verify)([-_.]|$)/.test(base) ? 1 : 2;
+  return [main, wf.on.includes('pull_request') ? 0 : 1, wf.file];
+}
+const byRank = (a: DetectedWorkflow, b: DetectedWorkflow): number => {
+  const [x, y] = [rank(a), rank(b)];
+  return x[0] - y[0] || x[1] - y[1] || (x[2] < y[2] ? -1 : x[2] > y[2] ? 1 : 0);
+};
 
 /** A code fence longer than any backtick run inside the block, so the block can't close early. */
 function fenceFor(lines: string[]): string {
@@ -18,27 +33,49 @@ function fenceFor(lines: string[]): string {
   return '`'.repeat(Math.max(3, longest + 1));
 }
 
-/** One workflow as a fenced block: a header line per job, then its steps (a script by its name). */
-function workflowLines(wf: DetectedWorkflow): string[] {
+/** A job's header and steps, as lines inside the block. */
+function jobLines(job: CiJob, prefix: string): string[] {
+  const out: string[] = [];
+  const where = [...job.runsOn.length ? [job.runsOn.join(', ')] : [], ...job.matrix];
+  out.push(`# job ${prefix}${job.id}${job.if ? ` · if: ${job.if}` : ''}${where.length ? ` · ${where.join(' · ')}` : ''}`);
+  for (const step of job.steps) {
+    const notes = [...step.if ? [`if: ${step.if}`] : [], ...step.dir ? [`in ${step.dir}/`] : [], ...step.shell ? [`shell: ${step.shell}`] : []];
+    if (notes.length) out.push(`# ${notes.join(' · ')}`);
+    const lines = step.run.split('\n');
+    if (lines.length === 1) { out.push(step.run); continue; }
+    // A script: named by the repo's own step name when it has a plain one; else its first real line.
+    if (step.name && !step.name.includes('${{')) { out.push(`# step "${step.name}": ${lines.length}-line script in the file`); continue; }
+    const first = lines.find((l) => l.trim() && !/^\s*(set -|#)/.test(l)) ?? lines[0] ?? '';
+    out.push(first);
+    out.push(`# … ${lines.length - 1} more line${lines.length > 2 ? 's' : ''} in this step`);
+  }
+  if (job.skipped) out.push(`# ${job.skipped} publish / deploy / push step${job.skipped > 1 ? 's' : ''} left out`);
+  return out;
+}
+
+/**
+ * One workflow as a fenced block, at most `max` lines. A job that calls a local
+ * reusable workflow shows that workflow's jobs under it (one level).
+ */
+function workflowLines(wf: DetectedWorkflow, byFile: Map<string, DetectedWorkflow>, max: number): string[] {
   const body: string[] = [];
   for (const job of wf.jobs) {
-    const where = [...job.runsOn.length ? [job.runsOn.join(', ')] : [], ...job.matrix];
-    body.push(`# job ${job.id}${job.if ? ` · if: ${job.if}` : ''}${where.length ? ` · ${where.join(' · ')}` : ''}`);
-    for (const step of job.steps) {
-      const notes = [...step.if ? [`if: ${step.if}`] : [], ...step.dir ? [`in ${step.dir}/`] : [], ...step.shell ? [`shell: ${step.shell}`] : []];
-      if (notes.length) body.push(`# ${notes.join(' · ')}`);
-      const lines = step.run.split('\n');
-      if (lines.length === 1) { body.push(step.run); continue; }
-      // A script: its name says what it does; else its first line that isn't shell setup.
-      if (step.name) { body.push(`# ${step.name} (${lines.length}-line script in the file)`); continue; }
-      const first = lines.find((l) => l.trim() && !/^\s*(set -|#)/.test(l)) ?? lines[0] ?? '';
-      body.push(first);
-      body.push(`# … ${lines.length - 1} more line${lines.length > 2 ? 's' : ''} in this step`);
+    if (job.calls) {
+      const callee = byFile.get(job.calls);
+      body.push(`# job ${job.id}${job.if ? ` · if: ${job.if}` : ''} · calls \`${job.calls}\``);
+      for (const inner of callee?.jobs ?? []) if (!inner.calls) body.push(...jobLines(inner, `${job.id} → `));
+      continue;
     }
+    if (job.steps.length || job.skipped) body.push(...jobLines(job, ''));
   }
-  const fence = fenceFor(body);
-  return [`${fence}bash`, ...body, fence];
+  const room = Math.max(1, max - 2);
+  const shown = body.length > room ? [...body.slice(0, room - 1), '# … more in the file'] : body;
+  const fence = fenceFor(shown);
+  return [`${fence}bash`, ...shown, fence];
 }
+
+const runsSomething = (wf: DetectedWorkflow): boolean =>
+  wf.jobs.some((j) => j.steps.length > 0 || j.skipped > 0 || j.calls !== undefined);
 
 /**
  * The banner written at the top of the managed block. It says what authored the
@@ -166,30 +203,37 @@ export function authorAgentsMd(ctx: RepoContext, now: Date = new Date()): string
   }
 
   // §3c CI — what the checks on a change run, so CI-only checks aren't a surprise.
-  // Release, schedule and manual workflows are named, not copied: an agent verifying
-  // a change has no business running a publish or a secret-setting script.
+  // Workflows that don't check changes (release, schedule, manual, bots) are
+  // named, not copied: an agent verifying a change has no business running them.
   const allCi = ctx.ci ?? [];
-  const ci = allCi.filter((wf) => wf.on.some((e) => CHECK_EVENTS.has(e)));
-  const named = allCi.filter((wf) => !ci.includes(wf));
   if (allCi.length) {
+    const byFile = new Map(allCi.map((wf) => [wf.file, wf]));
+    const called = new Set(allCi.flatMap((wf) => wf.jobs.map((j) => j.calls).filter((c): c is string => !!c)));
+    const checks = allCi.filter((wf) => wf.checksChanges && !wf.unreadable && runsSomething(wf)).sort(byRank);
+    const label = (wf: DetectedWorkflow): string =>
+      `\`${wf.file}\`${wf.unreadable ? ' (not valid YAML)' : wf.on.length ? ` (on ${wf.on.join(', ')})` : ''}`;
     push('## CI');
     push();
     let used = 0;
-    const rest: string[] = [];
-    for (const wf of ci) {
-      const header = `\`${wf.file}\`${wf.on.length ? ` (on ${wf.on.join(', ')})` : ''}`;
-      let block = workflowLines(wf);
-      if (used > 0 && used + block.length + 2 > CI_BUDGET) { rest.push(header); continue; }
-      if (block.length > CI_BUDGET) block = [...block.slice(0, CI_BUDGET - 2), '# … more in the file', block[block.length - 1] ?? '```'];
-      push(header);
+    const named: DetectedWorkflow[] = [];
+    for (const wf of checks) {
+      const left = CI_BUDGET - used - 2;
+      if (used > 0 && left < CI_MIN_BLOCK) { named.push(wf); continue; }
+      const block = workflowLines(wf, byFile, used === 0 ? CI_BUDGET - 2 : left);
+      push(label(wf));
       push();
       for (const l of block) push(l);
       push();
       used += block.length + 2;
     }
-    for (const wf of named) rest.push(`\`${wf.file}\`${wf.on.length ? ` (on ${wf.on.join(', ')})` : ''}`);
+    // Everything else, by name: overflow first, then the rest (a reusable workflow
+    // shown under its caller isn't named again).
+    const shown = new Set(checks.filter((wf) => !named.includes(wf)));
+    const rest = [...named, ...allCi.filter((wf) => !shown.has(wf) && !named.includes(wf) && !(called.has(wf.file) && !wf.checksChanges))];
     if (rest.length) {
-      push(`Also: ${rest.join(' · ')}.`);
+      const list = rest.slice(0, ALSO_MAX).map(label);
+      const more = rest.length - list.length;
+      push(`Also: ${list.join(' · ')}${more ? ` · and ${more} more in \`.github/workflows/\`` : ''}.`);
       push();
     }
   }

@@ -22,7 +22,7 @@ missed facts the repo already stated:
 
 From the review of those changes (every line is still a fact):
 
-- **CI is read as YAML** (new dependency: `yaml`). Each job shows its own `if:`, runners and matrix; comments are dropped, folded blocks read as one line, `with: run:` is not a step. A multi-line step shows its `name:`. Workflows that run on push or pull requests come first; past 40 lines the rest are named by file.
+- **CI is read as YAML.** This adds the package's first runtime dependency, `yaml`. Each job shows its own `if:`, runners and matrix; comments are dropped, folded blocks read as one line, `with: run:` is not a step. A multi-line step shows its `name:`. Workflows that run on push or pull requests come first; past 40 lines the rest are named by file.
 - **Before a release** shows what `npm publish` runs: `prepublishOnly`, then `prepack`. `prepublish` is gone: since npm 7 it runs on install.
 - **Watch and fix scripts** (`test:watch`, `lint:fix`) are not listed. The Definition of Done names only `test`, `lint` and typecheck.
 - **Folders:** a script uses a folder only when it names its path (`NODE_ENV=test` doesn't count; `./scripts/x.sh` does). `lib/` and `spec/` get no guessed gloss; `packages/` is "workspace packages" only when a workspace lists it; `pnpm-workspace.yaml`, `turbo.json`, `nx.json` and `lerna.json` are listed. Outside git, folders the root `.gitignore` ignores are left out.
@@ -38,12 +38,23 @@ From a second review (goose, run on ~19 real repos):
 
 - **CI shows only workflows that run on push or pull requests;** release, schedule and manual workflows are named, not copied, so no publish or secret-setting commands land in AGENTS.md. On goose's own repo the file went from 1,455 lines to 98.
 - **A code fence inside a step can't close the block** (the block's fence is longer than any backtick run in it). A step's `working-directory` and `shell` are shown.
-- **A file that kept the banner but lost its markers keeps its hand-written sections;** the block is added at the top. Only a file of nothing but the tool's own sections is replaced.
+- **A file that kept the banner but lost its markers keeps its text;** the block is added at the top and the CLI says so. It is replaced only when it is exactly this tool's output (timestamp aside).
 - **Folders:** git decides the list (a committed `dist/` is listed, submodules too); "used by" needs a path (`scripts/x`, `./scripts`), not a bare word, and a delete-only script doesn't count; notes that repeat the folder name (`docs/ — docs`) are gone.
 - **wrangler `main`:** top level only, comments ignored, either quote style; `wrangler.jsonc` is parsed.
 - **Entry points say what the manifest says:** `package entry (main)` / `(exports)`, not "library"; a bundled build isn't traced by file name (the built path is shown, with its build script); a file with a popular name and no manifest entry isn't listed (Cargo, Zig and Go defaults are, named as defaults); `exports` arrays and `rootDir: "."` are read.
 - **Contributing headings** keep `C#`, lose link URLs, at most six.
 - A description that starts like markup is escaped; a non-number script value no longer throws.
+
+From the reviews of those fixes (claude and goose):
+
+- **The install filter drops installs only:** `yarn test`, `npm ci && npm test` and other chains are kept (jest's CI was reduced to a coverage mapper).
+- **The CI section leads with the main check** (`ci.yml`, `test.yml`, …), shows a shared workflow under the job that calls it, and leaves out publish, deploy and push steps (with a count). Tag-only pushes, `pull_request_target` bots and PRs that only run on close are named, not copied. The "Also:" line names six, then counts. Workflow-level `defaults.run` is read; a workflow that isn't valid YAML is named as such; merge keys are expanded; a matrix set by an expression says so. Labels (`if:`, step names) stay on one comment line, and token-shaped strings are masked.
+- **Entry points are traced to a same-named source only for a plain `tsc` build;** anything else (tsup, tsdown, a build script, turbo) shows the declared path and its build script. tsconfig is read with comments and one `extends`. Whether a file is in the repo comes from git, so a local build can't change the output.
+- **Git that won't read the repo stops the run** with the reason and the `safe.directory` fix, instead of a different folder list.
+- **Workspace notes come from `pnpm-workspace.yaml`'s `packages:` only;** `main.go` is listed only when it is `package main`; Cargo's `[lib] path` replaces the `src/lib.rs` default; `turbo.json` is "Turborepo config".
+- **CONTRIBUTING headings:** fences follow CommonMark (a ``` line can't close a ```` fence) and setext headings are read.
+- **Checks never write files:** a `lint`/`test` script that runs `--fix`, `--write` or `-u` isn't listed; `rimraf dist && tsc -p src/` still counts as using `src/`.
+- The hook sets `minimum_pre_commit_version: '3.2.0'`; the golden tests author each example in its own temp git repo.
 
 **Upgrading from 0.1.0:** run `npx agents-md-facts` once. The output changed, so `--check` reports the old file as stale until you refresh it.
 

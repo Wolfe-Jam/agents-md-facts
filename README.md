@@ -23,11 +23,13 @@ Refresh only the block between:
 
 `<!-- agents:from-facts:start -->` … `<!-- agents:from-facts:end -->`
 
-Everything you write outside those markers is preserved. Keep the markers when you edit or merge the file: a refresh finds its block by them.
+Everything you write outside those markers is preserved. Keep the markers when you edit or merge the file: a refresh finds its block by them. A file without the markers gets the block added on top; it is replaced only when it is exactly this tool's output.
+
+It reads your manifests and config files and, in a git repo, the list of files git tracks. If git can't read the repo (for example "dubious ownership" in a container), it stops and says so rather than guess.
 
 ## What it authors
 
-Description and orientation (language, kind, Node version) · setup & build · tests · before a release (what `npm publish` runs first: `prepublishOnly`, `prepack`) · CI (the jobs and steps of the GitHub Actions workflows that run on push and pull requests; the others are named) · where things live (folders and entry points) · conventions · guardrails · definition of done · security (if secrets files exist) · commit & PR (with a pointer to your contributing guide).
+Description and orientation (language, kind, Node version) · setup & build · tests · before a release (what `npm publish` runs first: `prepublishOnly`, `prepack`) · CI (the GitHub Actions workflows that check pull requests and pushes, main check first, with any shared workflow they call; publish, deploy and push steps left out; other workflows named) · where things live (folders and entry points) · conventions · guardrails · definition of done · security (if secrets files exist) · commit & PR (with a pointer to your contributing guide).
 
 Guardrails and Definition of Done always appear; every other section only when the repo has something for it.
 
@@ -68,7 +70,7 @@ repos:
       - id: agents-md-facts
 ```
 
-Then: `pre-commit install`. The hook runs the published package with `npx`, so it needs Node and a network connection.
+Then: `pre-commit install`. Pin `rev` to a release tag: the hook runs that release's published package with `npx`, so it needs Node and a network connection.
 
 ## Ladder
 

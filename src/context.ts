@@ -1,12 +1,11 @@
-import { execFileSync } from 'child_process';
-import { existsSync } from 'fs';
-import { basename, join } from 'path';
+import { basename } from 'path';
 import { readPackageJson } from './detect/pkg.js';
 import { detectCommands, nodePackageManager } from './detect/commands.js';
 import { detectRelease, type DetectedRelease } from './detect/release.js';
 import { detectCi, type DetectedWorkflow } from './detect/ci.js';
 import { detectContributing, type DetectedContributing } from './detect/contributing.js';
 import { detectLayout, type DetectedLayout } from './detect/layout.js';
+import { gitFiles } from './detect/git.js';
 import { detectKeyFiles } from './detect/key-files.js';
 import { detectConventions } from './detect/conventions.js';
 import { detectSecrets, type DetectedSecrets } from './detect/secrets.js';
@@ -59,24 +58,13 @@ export interface RepoContext {
 }
 
 /**
- * True when `dir` is inside a git work tree (a repo root or any folder in one),
- * as git itself reports it. One answer, used for the layout and the git rules.
- */
-function insideGitWorkTree(dir: string): boolean {
-  try {
-    return execFileSync('git', ['rev-parse', '--is-inside-work-tree'], { cwd: dir, encoding: 'utf-8', stdio: ['ignore', 'pipe', 'ignore'] }).trim() === 'true';
-  } catch {
-    return existsSync(join(dir, '.git'));
-  }
-}
-
-/**
  * Run the detectors over a directory and collect their results into a plain
  * RepoContext. No merging, no external config, no interpretation — just facts.
  */
 export function buildRepoContext(dir: string): RepoContext {
   const pkg = readPackageJson(dir);
-  const git = insideGitWorkTree(dir);
+  // One read of git: whether this is a work tree, and what it tracks (throws when git refuses).
+  const tracked = gitFiles(dir);
 
   return {
     dir,
@@ -89,10 +77,10 @@ export function buildRepoContext(dir: string): RepoContext {
     packageManager: detectPackageManager(dir),
     kind: detectKind(dir, pkg),
     hasNodeManifest: pkg != null,
-    isGitRepo: git,
+    isGitRepo: tracked !== null,
     commands: detectCommands(dir, pkg),
     keyFiles: detectKeyFiles(dir),
-    layout: detectLayout(dir, pkg, nodePackageManager(dir, pkg), git),
+    layout: detectLayout(dir, pkg, nodePackageManager(dir, pkg), tracked),
     release: detectRelease(pkg),
     ci: detectCi(dir),
     contributing: detectContributing(dir),

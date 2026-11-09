@@ -18,7 +18,10 @@ const ROLES: RegExp[] = [
  * Variants that never exit or that change files (`test:watch`, `lint:fix`):
  * scripts a developer runs, never a check an agent should wait on.
  */
-const NOT_A_CHECK = /:(watch|fix|ui|dev|update|debug|open|serve)$/;
+const NOT_A_CHECK = /:(watch|fix|ui|dev|update|debug|open|serve)(:|$)/;
+
+/** A command that changes files (`eslint --fix`, `prettier --write`, `jest -u`): never a check. */
+const WRITES = /\s(--fix|--write|-w|--update-snapshot|-u)(\s|=|$)/;
 
 /**
  * The checks the Definition of Done names: the plain `test`, `lint` and
@@ -77,7 +80,12 @@ export function detectCommands(dir: string, pkg: PackageJson | null): Record<str
   if (pkg?.scripts) {
     const pm = nodePackageManager(dir, pkg);
     const names = Object.keys(pkg.scripts)
-      .filter((k) => typeof pkg.scripts?.[k] === 'string' && pkg.scripts[k].trim() && !NOT_A_CHECK.test(k));
+      .filter((k) => {
+        const cmd = pkg.scripts?.[k];
+        if (typeof cmd !== 'string' || !cmd.trim() || NOT_A_CHECK.test(k)) return false;
+        // A lint or test script that writes files isn't a check (build and dev scripts may write).
+        return !(/^(test|lint|format|check|typecheck|type-check)/.test(k) && WRITES.test(` ${cmd}`));
+      });
     for (const role of ROLES) {
       for (const k of names) if (role.test(k)) commands[k] = scriptCommand(pm, k);
     }

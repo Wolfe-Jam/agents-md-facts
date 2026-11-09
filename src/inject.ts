@@ -1,33 +1,19 @@
 import { existsSync, readFileSync, writeFileSync } from 'fs';
+import { stripVolatile } from './volatile.js';
 
 /** Markers bounding the managed block. Everything outside them is the user's. */
 export const START = '<!-- agents:from-facts:start -->';
 export const END = '<!-- agents:from-facts:end -->';
 
-/**
- * The tool's own banner fingerprint. A markerless file that begins with it is
- * legacy output we can safely reclaim — a user never hand-writes this line.
- */
+/** The tool's own banner fingerprint: a markerless file that begins with it was once this tool's output. */
 const FINGERPRINT = '<!-- authored by agents-md-facts';
 
-/** The `##` sections this tool writes. A markerless file with any other heading has the user's text in it. */
-const TOOL_SECTIONS = new Set([
-  'Setup & build', 'Run the tests', 'Before a release', 'CI', 'Where things live', 'Conventions',
-  'Guardrails', 'Definition of Done', 'Security & secrets', 'Commit & PR',
-]);
-
-function onlyToolSections(text: string): boolean {
-  let fence = false;
-  for (const line of text.split('\n')) {
-    if (/^\s*(`{3,}|~{3,})/.test(line)) { fence = !fence; continue; }
-    if (fence) continue;
-    const h = /^(#{1,6})\s+(.+?)\s*$/.exec(line);
-    if (!h) continue;
-    if ((h[1] ?? '').length === 1 && (h[2] ?? '').startsWith('AGENTS.md')) continue;
-    if (!TOOL_SECTIONS.has(h[2] ?? '')) return false;
-  }
-  return true;
-}
+/**
+ * What injectBlock did, so the CLI can say so. `kept` means a markerless file
+ * that starts with the banner had other text in it: the block went on top and
+ * nothing was removed.
+ */
+export type InjectResult = 'created' | 'replaced-block' | 'reclaimed' | 'kept' | 'prefixed';
 
 /** Wrap an authored block body in the start/end markers. */
 export function wrapBlock(block: string): string {
@@ -37,46 +23,47 @@ export function wrapBlock(block: string): string {
 /**
  * Non-destructively write the managed block into a file.
  *
- *   - file does not exist       → create it containing just the block
- *   - file has the markers      → replace ONLY the content between them
- *   - markerless legacy output  → reclaim it (led by the tool's fingerprint)
- *   - genuine user file         → PREFIX the block; preserve everything else
+ *   - file does not exist            → create it containing just the block
+ *   - file has the markers           → replace ONLY the content between them
+ *   - markerless, and exactly what   → reclaim it (it is this tool's output,
+ *     this tool writes now             the timestamp aside)
+ *   - anything else                  → PREFIX the block; keep every byte of the
+ *                                      file (`kept` when it starts with the banner)
  *
- * Idempotent: re-running updates the managed block in place and never touches a
- * byte outside the markers.
+ * A markerless file is replaced only when nothing in it could be the user's: a
+ * hand-added line under a tool heading is user text too, so no heading rule can
+ * tell. A CRLF file keeps CRLF line ends.
  */
-export function injectBlock(path: string, block: string): void {
-  const wrapped = wrapBlock(block);
-
+export function injectBlock(path: string, block: string): InjectResult {
   // 1. No file → create it with just the block.
   if (!existsSync(path)) {
-    writeFileSync(path, `${wrapped}\n`, 'utf-8');
-    return;
+    writeFileSync(path, `${wrapBlock(block)}\n`, 'utf-8');
+    return 'created';
   }
 
   const existing = readFileSync(path, 'utf-8');
+  const crlf = existing.includes('\r\n');
+  const wrapped = crlf ? wrapBlock(block).replace(/\n/g, '\r\n') : wrapBlock(block);
+  const nl = crlf ? '\r\n' : '\n';
   const s = existing.indexOf(START);
   const e = existing.indexOf(END);
 
   // 2. Markers present → replace only the managed block; keep everything around it.
   if (s !== -1 && e !== -1 && e > s) {
-    const before = existing.slice(0, s);
-    const after = existing.slice(e + END.length);
-    writeFileSync(path, `${before}${wrapped}${after}`, 'utf-8');
-    return;
+    writeFileSync(path, `${existing.slice(0, s)}${wrapped}${existing.slice(e + END.length)}`, 'utf-8');
+    return 'replaced-block';
   }
 
-  // 3. Markerless legacy output — led by the tool's own fingerprint, and nothing
-  //    but the tool's own sections in it. Reclaim it. A file that kept the banner
-  //    but gained hand-written sections (a merge that dropped the markers) falls
-  //    through to 4: its text is kept.
-  if (existing.trimStart().startsWith(FINGERPRINT) && onlyToolSections(existing)) {
-    writeFileSync(path, `${wrapped}\n`, 'utf-8');
-    return;
+  // 3. Markerless, and identical to what this tool writes now (timestamp aside) → reclaim.
+  const body = existing.replace(/\r\n/g, '\n').trim();
+  if (body.startsWith(FINGERPRINT) && stripVolatile(body) === stripVolatile(block.trim())) {
+    writeFileSync(path, `${wrapped}${nl}`, 'utf-8');
+    return 'reclaimed';
   }
 
-  // 4. Genuine user file → prefix the block; preserve all existing content.
-  writeFileSync(path, `${wrapped}\n\n${existing}`, 'utf-8');
+  // 4. Anything else → prefix the block; keep all existing content.
+  writeFileSync(path, `${wrapped}${nl}${nl}${existing}`, 'utf-8');
+  return body.startsWith(FINGERPRINT) ? 'kept' : 'prefixed';
 }
 
 /**

@@ -1,5 +1,5 @@
 <!-- agents:from-facts:start -->
-<!-- authored by agents-md-facts — from your repo's facts, never guessed · re-run to refresh · keep the start/end markers · authored: 2026-11-09T22:48:21.192Z -->
+<!-- authored by agents-md-facts — from your repo's facts, never guessed · re-run to refresh · keep the start/end markers · authored: 2026-11-09T23:34:36.107Z -->
 
 # AGENTS.md — go
 
@@ -23,7 +23,7 @@ go test ./...
 
 Entry points:
 
-- `main.go` — Go main package
+- `main.go` — Go `package main`
 
 ## Guardrails
 

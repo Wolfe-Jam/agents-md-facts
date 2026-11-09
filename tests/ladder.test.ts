@@ -71,6 +71,7 @@ jobs:
   test('runners, versions and steps; installs left out; conditions kept', () => {
     expect(parseWorkflow(WF)).toEqual({
       on: ['push'],
+      checksChanges: true,
       jobs: [{
         id: 'verify',
         runsOn: ['ubuntu-latest', 'windows-latest'],
@@ -80,6 +81,7 @@ jobs:
           { run: 'npm run coverage:checks', if: "matrix.os == 'ubuntu-latest'", name: 'Coverage' },
           { run: 'npm run build:validator\ngit diff --exit-code -- worker/validator.cjs', name: 'Drift' },
         ],
+        skipped: 0,
       }],
     });
   });
@@ -87,13 +89,14 @@ jobs:
     const md = author(repo({ 'package.json': pkg({}), '.github/workflows/ci.yml': WF }));
     expect(md).toContain('`.github/workflows/ci.yml` (on push)');
     expect(md).toContain('# job verify · ubuntu-latest, windows-latest · node 22, 24');
-    expect(md).toContain('# Drift (2-line script in the file)');
+    expect(md).toContain('# step "Drift": 2-line script in the file');
     expect(md).toContain("# if: matrix.os == 'ubuntu-latest'\nnpm run coverage:checks");
     expect(md).not.toContain('npm ci');
   });
-  test('a workflow that only uses actions adds nothing', () => {
+  test('a workflow that only uses actions is named, not copied', () => {
     const md = author(repo({ 'package.json': pkg({}), '.github/workflows/pages.yml': 'jobs:\n  a:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/deploy-pages@v4\n' }));
-    expect(md).not.toContain('## CI');
+    expect(md).toContain('Also: `.github/workflows/pages.yml`.');
+    expect(md).not.toContain('# job');
   });
 });
 
@@ -144,7 +147,7 @@ describe('A6 — where things live', () => {
       'package.json': pkg({
         bin: { 'card-check': 'dist/cli.js', 'mcp-card-check': 'dist/cli.js' },
         exports: { '.': { types: './dist/lib.d.ts', default: './dist/lib.js' } },
-        scripts: { test: 'node --test "test/*.test.ts"', smoke: 'node scripts/smoke.mjs', typecheck: 'tsc --noEmit -p worker' },
+        scripts: { build: 'tsc', test: 'node --test "test/*.test.ts"', smoke: 'node scripts/smoke.mjs', typecheck: 'tsc --noEmit -p worker' },
       }),
       'wrangler.jsonc': '{ "name": "x", "main": "worker/index.ts" }',
       'src/cli.ts': '', 'src/lib.ts': '', 'test/a.test.ts': '', 'scripts/smoke.mjs': '',

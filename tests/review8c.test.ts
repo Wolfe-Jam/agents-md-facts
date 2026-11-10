@@ -16,7 +16,8 @@ import { gitFiles } from '../src/detect/git.ts';
 import { extractBlock, injectBlock, MarkerError, wrapBlock } from '../src/inject.ts';
 
 const dirs: string[] = [];
-afterEach(() => { for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true }); });
+// Deleting the 12,000-file repo below takes seconds on Windows: past the default 5 s hook limit.
+afterEach(() => { for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true }); }, 120_000);
 
 function repo(files: Record<string, string>, git = false): string {
   const dir = mkdtempSync(join(tmpdir(), 'amf-r8c-'));

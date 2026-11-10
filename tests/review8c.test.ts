@@ -260,3 +260,13 @@ describe('restored from main: ranking, step details, folder notes', () => {
     expect(md).not.toContain('wrangler');
   });
 });
+
+describe('ladder 11-10: a CI note stays with its step; a step is shown whole', () => {
+  test('a condition ends its own line, and a step that mixes a repo command with a check keeps the check', () => {
+    const md = author(repo({
+      'package.json': pkg({ scripts: { test: 't', 'coverage:checks': 'c', build: 'b', 'build:validator': 'v' } }),
+      '.github/workflows/ci.yml': "on: pull_request\njobs:\n  verify:\n    runs-on: ubuntu-latest\n    steps:\n      - run: npm test\n      - if: matrix.node == '24'\n        run: npm run coverage:checks\n      - run: npm run build\n      - run: npm run build:validator && git diff --exit-code -- worker/validator.cjs\n",
+    }));
+    expect(md).toContain("npm test\nnpm run coverage:checks    # if: matrix.node == '24'\nnpm run build\nnpm run build:validator && git diff --exit-code -- worker/validator.cjs\n");
+  });
+});

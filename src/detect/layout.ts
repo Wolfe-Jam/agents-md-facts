@@ -118,8 +118,9 @@ function workspaceRoots(dir: string, pkg: PackageJson | null): Set<string> {
     if (Array.isArray(doc?.packages)) globs.push(...doc.packages);
   } catch { /* not readable: no workspace roots from it */ }
   return new Set(globs.filter((g): g is string => typeof g === 'string' && !g.startsWith('!'))
-    .map((g) => g.replace(/^\.\//, '').split('/')[0] ?? '')
-    .filter((g) => g && !/[*?[]/.test(g)));
+    // `packages/*` names a folder of packages; a literal path (`tools/x`) is one package, not a root.
+    .map((g) => /^(?:\.\/)?([^/*?[!]+)\/\*{1,2}$/.exec(g)?.[1] ?? '')
+    .filter(Boolean));
 }
 
 /**
@@ -134,42 +135,76 @@ function scriptUsesFolder(command: string, folder: string): boolean {
   return command.split(/&&|\|\||;|\|/).some((seg) => !/^\s*(rm|rimraf|del|trash)\b/.test(seg) && (path.test(seg) || cd.test(seg)));
 }
 
-/** tsconfig's `outDir` and `rootDir`, comments allowed, following one `extends` (a relative file). */
+/**
+ * tsconfig's `outDir` and `rootDir`, comments allowed, following relative
+ * `extends` (a string or an array, later entries win; up to five levels). A
+ * path is relative to the config that sets it. With no `rootDir`, an `include`
+ * of one folder stands in for it; an `include` of several means the root can't
+ * be told, so nothing is traced.
+ */
 function tsDirs(dir: string): { outDir: string; rootDirs: string[] } | null {
-  const own = readJsonc(join(dir, 'tsconfig.json'));
-  if (!own) return null;
-  const opts = (c: Record<string, unknown> | null): Record<string, unknown> =>
-    (c?.compilerOptions && typeof c.compilerOptions === 'object' ? c.compilerOptions : {}) as Record<string, unknown>;
-  const mine = opts(own);
-  let parent: Record<string, unknown> = {};
-  let base = '';
-  if ((mine.outDir === undefined || mine.rootDir === undefined) && typeof own.extends === 'string' && own.extends.startsWith('.')) {
-    const file = own.extends.endsWith('.json') ? own.extends : `${own.extends}.json`;
-    parent = opts(readJsonc(join(dir, file)));
-    base = dirname(file);
-  }
-  // A path set in the extended config is relative to that config's folder.
-  const pick = (key: string): { value: unknown; from: string } =>
-    mine[key] !== undefined ? { value: mine[key], from: '' } : { value: parent[key], from: base };
-  const clean = (p: string, from: string): string => normalize(join(from, p)).replace(/\\/g, '/').replace(/\/$/, '') || '.';
-  const out = pick('outDir');
-  const root = pick('rootDir');
-  if (typeof out.value !== 'string') return null;
-  return {
-    outDir: clean(out.value, out.from),
-    rootDirs: typeof root.value === 'string' ? [clean(root.value, root.from)] : ['src', '.'],
+  type Found = { value: unknown; from: string };
+  const found: Record<'outDir' | 'rootDir' | 'include', Found | undefined> = { outDir: undefined, rootDir: undefined, include: undefined };
+  const visit = (file: string, depth: number): boolean => {
+    const cfg = readJsonc(join(dir, file));
+    if (!cfg) return false;
+    const from = dirname(file);
+    const opts = (cfg.compilerOptions && typeof cfg.compilerOptions === 'object' ? cfg.compilerOptions : {}) as Record<string, unknown>;
+    if (found.outDir === undefined && opts.outDir !== undefined) found.outDir = { value: opts.outDir, from };
+    if (found.rootDir === undefined && opts.rootDir !== undefined) found.rootDir = { value: opts.rootDir, from };
+    if (found.include === undefined && cfg.include !== undefined) found.include = { value: cfg.include, from };
+    if (depth >= 5) return true;
+    const ext = typeof cfg.extends === 'string' ? [cfg.extends] : Array.isArray(cfg.extends) ? cfg.extends : [];
+    // Later entries win, so they are read first; a package (`@tsconfig/node20`) isn't read.
+    for (const e of [...ext].reverse()) {
+      if (typeof e !== 'string' || !e.startsWith('.')) continue;
+      const f = normalize(join(from, e.endsWith('.json') ? e : `${e}.json`));
+      visit(f, depth + 1);
+    }
+    return true;
   };
+  if (!visit('tsconfig.json', 0)) return null;
+  const clean = (p: string, from: string): string => normalize(join(from, p)).replace(/\\/g, '/').replace(/\/$/, '') || '.';
+  const out = found.outDir;
+  if (!out || typeof out.value !== 'string') return null;
+  const outDir = clean(out.value, out.from);
+  const root = found.rootDir;
+  if (root && typeof root.value === 'string') return { outDir, rootDirs: [clean(root.value, root.from)] };
+  const inc = found.include;
+  if (inc && Array.isArray(inc.value)) {
+    const folders = [...new Set(inc.value.map((g) => (typeof g === 'string' ? /^(?:\.\/)?([^*?/[]+)(?:\/.*)?$/.exec(g)?.[1] : undefined)))];
+    const one = folders[0];
+    return folders.length === 1 && one && !/\.\w+$/.test(one) ? { outDir, rootDirs: [clean(one, inc.from)] } : { outDir, rootDirs: [] };
+  }
+  return { outDir, rootDirs: ['src', '.'] };
 }
 
+/** tsc flags that change what it reads or where it writes: then `dist/x.js` may not come from `src/x.ts`. */
+const TSC_REDIRECTS = /\s(-p|--project|-b|--build|--outDir|--rootDir|--outFile|--rootDirs)(\s|=|$)/;
+
 /**
- * True when every command of the build script compiles with plain `tsc` (or only
- * cleans, copies or makes folders). Only then does `dist/x.js` come from a
- * same-named `src/x.ts`; a bundler or a build file can take any input.
+ * True when a build command compiles with plain `tsc` (no `-p`, `--outDir`,
+ * `--rootDir`, `-b`) and otherwise only cleans or makes folders. `npm run x`
+ * steps are followed into the scripts they run. Only then does `dist/x.js`
+ * come from a same-named `src/x.ts`; a bundler, a copy or a build file can
+ * take any input.
  */
-function plainTscBuild(command: string): boolean {
-  const segs = command.split(/&&|;/).map((s) => s.trim()).filter(Boolean);
-  return segs.some((s) => /^tsc(\s|$)/.test(s))
-    && segs.every((s) => /^(tsc|rimraf|rm|del|cp|mkdir|shx|chmod)(\s|$)/.test(s) || /^node -e\s/.test(s));
+function plainTscBuild(command: string, scripts: Record<string, string> = {}, depth = 0): boolean | 'clean' {
+  const segs = command.split(/&&|\|\||;|\|/).map((s) => s.trim()).filter(Boolean);
+  let tsc = false;
+  for (const seg of segs) {
+    const ref = /^(?:npm|pnpm|yarn|bun)\s+(?:run\s+)?([\w:.-]+)$/.exec(seg)?.[1];
+    if (ref && scripts[ref] !== undefined && depth < 3) {
+      const r = plainTscBuild(scripts[ref], scripts, depth + 1);
+      if (r === false) return false;
+      if (r === true) tsc = true;
+      continue;
+    }
+    if (/^tsc(\s|$)/.test(seg)) { if (TSC_REDIRECTS.test(` ${seg}`)) return false; tsc = true; continue; }
+    if (/^(rimraf|rm|del|mkdir|shx\s+(rm|mkdir)|chmod)(\s|$)/.test(seg) || /^node -e\s/.test(seg)) continue;
+    return false;
+  }
+  return tsc ? true : 'clean';
 }
 
 /**
@@ -182,18 +217,23 @@ function toolchainEntries(dir: string): LayoutEntry[] {
   const out: LayoutEntry[] = [];
   const cargo = read(join(dir, 'Cargo.toml'));
   if (cargo !== null) {
-    const libPath = /\[lib\][^[]*\bpath\s*=/.test(cargo);
+    // `path =` inside the `[lib]` table (it ends at the next line starting with `[`).
+    const lib = /^\[lib\][^\n]*\n((?:(?!\s*\[)[^\n]*\n?)*)/m.exec(cargo)?.[1] ?? '';
+    const libPath = /^\s*path\s*=/m.test(lib);
+    const virtual = /^\[workspace\]/m.test(cargo) && !/^\[package\]/m.test(cargo);
     const noAutoBins = /\bautobins\s*=\s*false/.test(cargo);
-    if (!noAutoBins && existsSync(join(dir, 'src/main.rs'))) out.push({ path: 'src/main.rs', note: 'binary crate root (Cargo default)' });
-    if (!libPath && existsSync(join(dir, 'src/lib.rs'))) out.push({ path: 'src/lib.rs', note: 'library crate root (Cargo default)' });
+    if (!virtual && !noAutoBins && existsSync(join(dir, 'src/main.rs'))) out.push({ path: 'src/main.rs', note: 'binary crate root (Cargo default)' });
+    if (!virtual && !libPath && existsSync(join(dir, 'src/lib.rs'))) out.push({ path: 'src/lib.rs', note: 'library crate root (Cargo default)' });
   }
-  const zig = read(join(dir, 'build.zig'));
+  const zig = read(join(dir, 'build.zig'))?.replace(/\/\/.*$/gm, '') ?? null;
   if (zig !== null) {
     for (const f of ['src/main.zig', 'src/root.zig']) {
       if (zig.includes(`"${f}"`) && existsSync(join(dir, f))) out.push({ path: f, note: 'named in build.zig' });
     }
   }
-  if (existsSync(join(dir, 'go.mod')) && /^\s*package\s+main\b/m.test(read(join(dir, 'main.go')) ?? '')) {
+  const goMain = read(join(dir, 'main.go')) ?? '';
+  // `//go:build ignore` marks a generator script run by `go run`, not the program.
+  if (existsSync(join(dir, 'go.mod')) && /^\s*package\s+main\b/m.test(goMain) && !/^\/\/go:build\s+ignore\b/m.test(goMain)) {
     out.push({ path: 'main.go', note: 'Go `package main`' });
   }
   return out;
@@ -246,11 +286,20 @@ export function detectLayout(dir: string, pkg: PackageJson | null, pm: string, t
 
   // A file is part of the repo when git tracks it; outside git, when it exists and isn't build output.
   const ts = tsDirs(dir);
-  const outputs = [...new Set([...(ts ? [ts.outDir] : []), ...OUTPUT_DIRS])];
+  // A folder tsconfig names as the source root (`rootDir: lib`) is source, not output.
+  const outputs = [...new Set([...(ts ? [ts.outDir] : []), ...OUTPUT_DIRS])].filter((o) => !ts?.rootDirs.includes(o));
   const underOutput = (p: string): string | undefined => outputs.find((o) => p.startsWith(`${o}/`));
   const inRepo = (p: string): boolean => (tracked ? tracked.files.has(p) : existsSync(join(dir, p)) && !underOutput(p));
-  const buildScript = scripts.find(([k]) => /^(build|compile|bundle)$/.test(k));
-  const traceable = buildScript ? plainTscBuild(buildScript[1]) : ts !== null;
+  // Every script that may write the output (a build-named or publish-time script, or one
+  // that runs a bundler, whatever its name) must be plain tsc; tsconfig alone is a tsc build.
+  const allScripts = Object.fromEntries(scripts);
+  const BUNDLER = /(^|[\s/])(tsup|tsdown|esbuild|rollup|vite|webpack|bunchee|unbuild|swc|babel|ncc|parcel|pkgroll|microbundle)(\s|$)|\bbun build\b/;
+  const builders = scripts.filter(([k, v]) => /^(build|compile|bundle)([:-]|$)/.test(k)
+    || (/^(prepare|prepack|prepublishOnly)$/.test(k) && !/^\s*(husky|is-ci)\b/.test(v))
+    || BUNDLER.test(v));
+  const verdicts = builders.map(([, v]) => plainTscBuild(v, allScripts));
+  const traceable = !verdicts.includes(false) && (verdicts.includes(true) || ts !== null);
+  const buildScript = scripts.find(([k]) => /^(build|compile|bundle)$/.test(k)) ?? builders[0];
   const built = buildScript ? ` (built by \`${scriptCommand(pm, buildScript[0])}\`)` : '';
 
   /** The source behind a declared path: itself when it's in the repo, else a same-named source for a plain tsc build. */

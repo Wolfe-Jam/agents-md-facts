@@ -152,12 +152,12 @@ describe('C6 / G8-4 — entry points traced only for a plain tsc build', () => {
       expect(md).toContain('- `dist/cli.js` — the `x` command (built by `npm run build`)');
     });
   }
-  test('`tsc -p tsconfig.build.json && node -e "…copy…"` is still traced', () => {
+  test('`tsc -p tsconfig.build.json` is not traced: that config can set another rootDir', () => {
     const md = author(repo({
       'package.json': pkg({ bin: { x: 'dist/cli.js' }, scripts: { build: 'tsc -p tsconfig.build.json && node -e "require(\'fs\').copyFileSync(\'a\',\'b\')"' } }),
       'src/cli.ts': '',
     }));
-    expect(md).toContain('- `src/cli.ts` — the `x` command');
+    expect(md).toContain('- `dist/cli.js` — the `x` command (built by `npm run build`)');
   });
   test('a commented tsconfig option is ignored; `extends` is followed', () => {
     const md = author(repo({

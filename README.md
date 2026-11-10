@@ -23,7 +23,7 @@ Refresh only the block between:
 
 `<!-- agents:from-facts:start -->` … `<!-- agents:from-facts:end -->`
 
-Everything you write outside those markers is preserved. Keep the markers when you edit or merge the file: a refresh finds its block by them. A file without the markers gets the block added on top; it is replaced only when it is exactly this tool's output.
+Everything you write outside those markers is preserved. Keep the markers when you edit or merge the file, each on a line of its own: a refresh finds its block by them, and a marker quoted inside a sentence is just text. A file without the markers gets the block added on top; it is replaced only when it is exactly this tool's output.
 
 It reads your manifests and config files and, in a git repo, the list of files git tracks. If git can't read the repo (for example "dubious ownership" in a container), it stops and says so rather than guess.
 

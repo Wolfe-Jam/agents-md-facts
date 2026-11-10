@@ -18,10 +18,14 @@ const ROLES: RegExp[] = [
  * Variants that never exit or that change files (`test:watch`, `lint:fix`):
  * scripts a developer runs, never a check an agent should wait on.
  */
-const NOT_A_CHECK = /:(watch|fix|ui|dev|update|debug|open|serve)(:|$)/;
+const NOT_A_CHECK = /:(watch|fix|ui|dev|update|debug|open|serve)([:-]|$)/;
 
-/** A command that changes files (`eslint --fix`, `prettier --write`, `jest -u`): never a check. */
-const WRITES = /\s(--fix|--write|-w|--update-snapshot|-u)(\s|=|$)/;
+/**
+ * A command that changes files (`eslint --fix`, `prettier --write`, `jest -u`):
+ * never a check. Short flags count only after the tool where they mean that:
+ * `-w` is npm's `--workspace` and jest's `--maxWorkers`, `-u` is mocha's `--ui`.
+ */
+const WRITES = /\s(--fix|--write|--update-snapshot|--updateSnapshot)(\s|=|$)|\b(jest|vitest)\b[^&|;]*\s-u(\s|$)|\bprettier\b[^&|;]*\s-w(\s|$)/;
 
 /**
  * The checks the Definition of Done names: the plain `test`, `lint` and

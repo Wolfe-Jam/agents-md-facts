@@ -3,7 +3,7 @@ import { join } from 'path';
 import { authorAgentsMd } from './author.js';
 import { buildRepoContext, type RepoContext } from './context.js';
 import { GitUnreadableError } from './detect/git.js';
-import { extractBlock, injectBlock, wrapBlock } from './inject.js';
+import { extractBlock, injectBlock, MarkerError, wrapBlock } from './inject.js';
 import { stripVolatile } from './volatile.js';
 
 const HELP = `agents-md-facts — author a minimal AGENTS.md from your repo's facts.
@@ -28,16 +28,7 @@ function main(): void {
 
   const dir = process.cwd();
   const target = join(dir, 'AGENTS.md');
-  let ctx: RepoContext;
-  try {
-    ctx = buildRepoContext(dir);
-  } catch (e) {
-    if (e instanceof GitUnreadableError) {
-      process.stderr.write(`${e.message}\n`);
-      process.exit(2);
-    }
-    throw e;
-  }
+  const ctx: RepoContext = buildRepoContext(dir);
   const block = authorAgentsMd(ctx);
 
   // --check: fail if missing or drifted from repo facts.
@@ -79,4 +70,13 @@ function main(): void {
   process.stderr.write(`AGENTS.md authored from facts → ${target}\n`);
 }
 
-main();
+try {
+  main();
+} catch (e) {
+  // Git that won't read the repo, or a file with two start markers: stop, write nothing, say why.
+  if (e instanceof GitUnreadableError || e instanceof MarkerError) {
+    process.stderr.write(`${e.message}\n`);
+    process.exit(2);
+  }
+  throw e;
+}

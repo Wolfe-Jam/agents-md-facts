@@ -15,11 +15,19 @@ const CI_MIN_BLOCK = 8;
 /** Workflows named on the "Also:" line before the count takes over. */
 const ALSO_MAX = 6;
 
-/** Rank a workflow: the repo's main check first (`ci.yml`, `test.yml`, …), then pull-request ones. */
+/**
+ * Rank a workflow: the repo's main check first (`ci.yml`, `test.yml`, …), then
+ * names with ci / test / build in them, then check / lint / verify, then the
+ * rest; helpers that fix, format, label or update things (`lint-autofix.yml`,
+ * `check-changelog.yml`) last. Pull-request ones first within a rank.
+ */
 function rank(wf: DetectedWorkflow): [number, number, string] {
   const base = wf.file.replace(/^.*\//, '').replace(/\.ya?ml$/, '').toLowerCase();
-  const main = /^(ci|tests?|checks?|build|lint|main|verify|validate|pr)$/.test(base) ? 0
-    : /(^|[-_.])(ci|tests?|checks?|lint|verify)([-_.]|$)/.test(base) ? 1 : 2;
+  const word = (re: string): boolean => new RegExp(`(^|[-_.])(${re})([-_.]|$)`).test(base);
+  const main = word('(auto)?fix|format|bot|labell?er|label|update|changelog|release|deploy|publish|stale') ? 4
+    : /^(ci|tests?|checks?|build|lint|main|verify|validate|pr)$/.test(base) ? 0
+      : word('ci|tests?|build') ? 1
+        : word('checks?|lint|verify') ? 2 : 3;
   return [main, wf.on.includes('pull_request') ? 0 : 1, wf.file];
 }
 const byRank = (a: DetectedWorkflow, b: DetectedWorkflow): number => {
@@ -39,7 +47,8 @@ function jobLines(job: CiJob, prefix: string): string[] {
   const where = [...job.runsOn.length ? [job.runsOn.join(', ')] : [], ...job.matrix];
   out.push(`# job ${prefix}${job.id}${job.if ? ` · if: ${job.if}` : ''}${where.length ? ` · ${where.join(' · ')}` : ''}`);
   for (const step of job.steps) {
-    const notes = [...step.if ? [`if: ${step.if}`] : [], ...step.dir ? [`in ${step.dir}/`] : [], ...step.shell ? [`shell: ${step.shell}`] : []];
+    const notes = [...step.if ? [`if: ${step.if}`] : [], ...step.dir ? [`in ${step.dir}/`] : [], ...step.shell ? [`shell: ${step.shell}`] : [],
+      ...step.ships ? ['part of this step publishes / deploys / pushes'] : []];
     if (notes.length) out.push(`# ${notes.join(' · ')}`);
     const lines = step.run.split('\n');
     if (lines.length === 1) { out.push(step.run); continue; }
@@ -63,7 +72,11 @@ function workflowLines(wf: DetectedWorkflow, byFile: Map<string, DetectedWorkflo
     if (job.calls) {
       const callee = byFile.get(job.calls);
       body.push(`# job ${job.id}${job.if ? ` · if: ${job.if}` : ''} · calls \`${job.calls}\``);
-      for (const inner of callee?.jobs ?? []) if (!inner.calls) body.push(...jobLines(inner, `${job.id} → `));
+      for (const inner of callee?.jobs ?? []) {
+        // One level: a callee's own call is named, not opened; a job with nothing kept isn't printed.
+        if (inner.calls) body.push(`# job ${job.id} → ${inner.id} · calls \`${inner.calls}\``);
+        else if (inner.steps.length || inner.skipped) body.push(...jobLines(inner, `${job.id} → `));
+      }
       continue;
     }
     if (job.steps.length || job.skipped) body.push(...jobLines(job, ''));
@@ -208,7 +221,6 @@ export function authorAgentsMd(ctx: RepoContext, now: Date = new Date()): string
   const allCi = ctx.ci ?? [];
   if (allCi.length) {
     const byFile = new Map(allCi.map((wf) => [wf.file, wf]));
-    const called = new Set(allCi.flatMap((wf) => wf.jobs.map((j) => j.calls).filter((c): c is string => !!c)));
     const checks = allCi.filter((wf) => wf.checksChanges && !wf.unreadable && runsSomething(wf)).sort(byRank);
     const label = (wf: DetectedWorkflow): string =>
       `\`${wf.file}\`${wf.unreadable ? ' (not valid YAML)' : wf.on.length ? ` (on ${wf.on.join(', ')})` : ''}`;
@@ -229,7 +241,8 @@ export function authorAgentsMd(ctx: RepoContext, now: Date = new Date()): string
     // Everything else, by name: overflow first, then the rest (a reusable workflow
     // shown under its caller isn't named again).
     const shown = new Set(checks.filter((wf) => !named.includes(wf)));
-    const rest = [...named, ...allCi.filter((wf) => !shown.has(wf) && !named.includes(wf) && !(called.has(wf.file) && !wf.checksChanges))];
+    const expanded = new Set([...shown].flatMap((wf) => wf.jobs.map((j) => j.calls).filter((c): c is string => !!c)));
+    const rest = [...named, ...allCi.filter((wf) => !shown.has(wf) && !named.includes(wf) && !(expanded.has(wf.file) && !wf.checksChanges))];
     if (rest.length) {
       const list = rest.slice(0, ALSO_MAX).map(label);
       const more = rest.length - list.length;

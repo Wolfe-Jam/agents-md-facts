@@ -151,6 +151,26 @@ function exportsEntry(exp: unknown, depth = 0): string | null {
 }
 
 /**
+ * The commands a Python project declares: `[project.scripts]` (and Poetry's
+ * `[tool.poetry.scripts]`), each `name = "module:function"`, as written.
+ */
+function pythonScripts(dir: string): LayoutEntry[] {
+  const py = read(join(dir, 'pyproject.toml'));
+  if (py === null) return [];
+  const out: LayoutEntry[] = [];
+  for (const table of ['project.scripts', 'tool.poetry.scripts']) {
+    const start = py.search(new RegExp(`^\\[${table.replace(/\./g, '\\.')}\\]\\s*$`, 'm'));
+    if (start === -1) continue;
+    for (const line of py.slice(start).split(/\r?\n/).slice(1)) {
+      if (/^\s*\[/.test(line)) break;
+      const m = /^\s*"?([\w.-]+)"?\s*=\s*["']([^"']+)["']/.exec(line);
+      if (m?.[1] && m[2]) out.push({ path: m[2], note: `the \`${m[1]}\` command (\`[${table}]\`)` });
+    }
+  }
+  return out;
+}
+
+/**
  * Entry points Cargo and Go define by documented default when the manifest
  * names none (curated defaults, named as such): Cargo's `src/main.rs` /
  * `src/lib.rs` unless Cargo.toml turns them off or moves them, and a root
@@ -181,7 +201,7 @@ function toolchainEntries(dir: string, has: (p: string) => boolean): LayoutEntry
  * The repo's map, from what it declares: each top-level folder with a note
  * (a wrangler `main` inside it, a workspace listing it, a name that needs
  * explaining, the scripts that use it), any monorepo config, then the entry points exactly as the
- * manifest names them (`bin`, `exports`, `main`), else Cargo's and Go's defaults. A declared path git doesn't
+ * manifest names them (`bin`, `exports`, `main`; pyproject `[project.scripts]`), else Cargo's and Go's defaults. A declared path git doesn't
  * track says so, with the build script's name; nothing is traced to a source
  * file, which would mean judging what the build does.
  */
@@ -232,6 +252,7 @@ export function detectLayout(dir: string, pkg: PackageJson | null, pm: string, t
   const exp = exportsEntry(pkg?.exports);
   if (exp) place(exp, 'package entry (`exports`)');
   else if (typeof pkg?.main === 'string' && pkg.main.trim()) place(pkg.main.trim(), 'package entry (`main`)');
+  for (const e of pythonScripts(dir)) if (!seen.has(e.path)) { seen.add(e.path); entries.push(e); }
   if (!entries.length) {
     const has = (p: string): boolean => (tracked ? tracked.files.has(p) : existsSync(join(dir, p)));
     entries.push(...toolchainEntries(dir, has));

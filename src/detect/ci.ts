@@ -247,14 +247,34 @@ const BUILTIN = new Set(('add audit bin cache config create dedupe deploy dlx en
   + 'list ls login logout npm outdated pack patch prune publish rebuild remove rm root run set store unlink up update '
   + 'upgrade version why workspace workspaces').split(' '));
 
+/** Check tools a Node repo runs through npx / bunx / pnpm exec, or directly. */
+const NODE_CHECKS = /^(?:(?:npx|bunx|pnpm exec|pnpm dlx|yarn)(?:\s+-\S+)*\s+)?(?:tsc|eslint|vitest|jest|playwright test|prettier --check|biome (?:check|ci|lint))(?:\s|$)/;
+
 /**
- * The repo's own commands, for matching CI lines: a package.json script called
- * as `npm test` / `npm run x`, `pnpm x` / `pnpm run x`, `yarn x`, `bun run x`
- * (read from the package.json in the folder the step runs in), or a command
- * already listed (`cargo test`). Anything else a workflow runs isn't judged; it
- * is left in the file.
+ * The repo's own commands, for matching CI lines:
+ * - a package.json script, called as `npm test` / `npm run x`, `pnpm x`,
+ *   `yarn x`, `bun run x` (read from the package.json in the folder the step
+ *   runs in), or in workspace packages (`pnpm --filter x test`, `pnpm -r test`,
+ *   `yarn workspace x test`, `npm -w x run test`);
+ * - a command already listed (`cargo test`);
+ * - the declared toolchain's own commands: `bun test` (Bun lockfile or
+ *   bunfig.toml), check tools in a Node repo (`tsc`, `eslint`, `vitest`, …),
+ *   `cargo test|build|check|clippy|fmt`, `go test|build|vet`, `zig build`,
+ *   `pytest` / `ruff` / `mypy` / `black --check` (also via `uv run`,
+ *   `poetry run`, `python -m`), and `make <target>` for a target the Makefile
+ *   defines.
+ * Anything else a workflow runs isn't judged; it is counted and left in the file.
  */
 export function ownCommands(repoDir: string, listed: string[]): Known {
+  const at = (...p: string[]): boolean => existsSync(join(repoDir, ...p));
+  const tool = {
+    node: at('package.json'),
+    bun: at('bun.lock') || at('bun.lockb') || at('bunfig.toml'),
+    cargo: at('Cargo.toml'),
+    go: at('go.mod'),
+    zig: at('build.zig'),
+    python: at('pyproject.toml') || at('pytest.ini') || at('setup.py'),
+  };
   const cache = new Map<string, Set<string>>();
   const scriptsIn = (sub: string): Set<string> => {
     let names = cache.get(sub);
@@ -268,14 +288,39 @@ export function ownCommands(repoDir: string, listed: string[]): Known {
     }
     return names;
   };
+  const makeTargets = new Map<string, Set<string>>();
+  const targetsIn = (sub: string): Set<string> => {
+    let t = makeTargets.get(sub);
+    if (!t) {
+      t = new Set();
+      try {
+        for (const m of readFileSync(join(repoDir, sub, 'Makefile'), 'utf-8').matchAll(/^([\w.-]+)\s*:(?!=)/gm)) if (m[1]) t.add(m[1]);
+      } catch { /* no Makefile there */ }
+      makeTargets.set(sub, t);
+    }
+    return t;
+  };
   return (command, dir) => {
     const c = command.replace(/^(\w+=\S*\s+)+/, '');
     if (!dir && listed.some((l) => c === l || c.startsWith(`${l} `))) return true;
+    // Workspace packages' scripts: the target package's scripts aren't read, the call is.
+    const ws = /^(?:pnpm(?:\s+(?:-r|--recursive|(?:--filter|-F)\s+\S+|-[\w-]+))+|npm(?:\s+(?:-ws|--workspaces|(?:-w|--workspace)\s+\S+|-[\w-]+))+(?:\s+run)?|yarn\s+workspace\s+\S+|yarn\s+workspaces\s+foreach(?:\s+-\S+)*\s+run)\s+([^\s-]\S*)/.exec(c);
+    if (ws?.[1] && !BUILTIN.has(ws[1]) && /(?:-r|--recursive|--filter|-F|-ws|--workspaces|-w|--workspace|workspace)\b/.test(c)) return true;
     // Boolean flags before the script name (`yarn --silent test`, `pnpm -s lint`) are skipped.
     const m = /^(npm|pnpm|yarn|bun)(?:\s+-[\w-]+)*\s+(?:(run|run-script)(?:\s+-[\w-]+)*\s+)?([^\s-]\S*)/.exec(c);
-    if (!m) return false;
-    const [, pm, run, name = ''] = m;
-    if (!run && (pm === 'bun' || (pm === 'npm' ? !/^(test|t|start)$/.test(name) : BUILTIN.has(name)))) return false;
-    return scriptsIn(dir ?? '').has(pm === 'npm' && name === 't' ? 'test' : name);
+    if (m) {
+      const [, pm, run, name = ''] = m;
+      const script = !(!run && (pm === 'bun' || (pm === 'npm' ? !/^(test|t|start)$/.test(name) : BUILTIN.has(name))))
+        && scriptsIn(dir ?? '').has(pm === 'npm' && name === 't' ? 'test' : name);
+      if (script) return true;
+    }
+    if (tool.bun && /^bun test(?:\s|$)/.test(c)) return true;
+    if (tool.node && NODE_CHECKS.test(c)) return true;
+    if (tool.cargo && /^cargo\s+(?:\+\S+\s+)?(?:test|build|check|clippy|fmt|nextest)(?:\s|$)/.test(c)) return true;
+    if (tool.go && /^(?:go\s+(?:test|build|vet)|golangci-lint\s+run)(?:\s|$)/.test(c)) return true;
+    if (tool.zig && /^zig\s+build(?:\s|$)/.test(c)) return true;
+    if (tool.python && /^(?:uv run |poetry run |python3? -m )?(?:pytest|ruff|mypy|black --check)(?:\s|$)/.test(c)) return true;
+    const make = /^make\s+(?:-\S+\s+)*([\w.-]+)(?:\s|$)/.exec(c)?.[1];
+    return !!make && targetsIn(dir ?? '').has(make);
   };
 }

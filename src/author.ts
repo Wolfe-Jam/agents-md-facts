@@ -173,7 +173,7 @@ export function authorAgentsMd(ctx: RepoContext, now: Date = new Date()): string
   const setupLines: string[] = [];
   const install = installCommand(ctx);
   if (install) setupLines.push(`${install}    # install dependencies`);
-  for (const [k, v] of setupCmds) setupLines.push(`${v}    # ${k}`);
+  for (const [k, v] of setupCmds) setupLines.push(`${v}    # ${k === 'install' ? 'install dependencies' : k}`);
   if (setupLines.length) {
     push('## Setup & build');
     push();
@@ -195,7 +195,13 @@ export function authorAgentsMd(ctx: RepoContext, now: Date = new Date()): string
 
   // §3b Before a release — the gate the manifest declares
   const release = ctx.release;
-  if (release?.scripts.length) {
+  if (release?.kind === 'none') {
+    // Said, not left for an agent to prove: nothing runs before `npm publish`.
+    push('## Before a release');
+    push();
+    push('`npm publish` runs no checks first: package.json has no `prepublishOnly`, `prepack` or `release` script.');
+    push();
+  } else if (release?.scripts.length) {
     push('## Before a release');
     push();
     const names = release.scripts.map((r) => `\`${r.name}\``).join(', then ');
@@ -216,6 +222,13 @@ export function authorAgentsMd(ctx: RepoContext, now: Date = new Date()): string
   // Workflows that don't check changes (release, schedule, manual, bots) are
   // named, not copied: an agent verifying a change has no business running them.
   const allCi = ctx.ci ?? [];
+  if (!allCi.length && ctx.isGitRepo && ctx.ci) {
+    // Said, not left for an agent to prove: no checks run on GitHub for a change.
+    push('## CI');
+    push();
+    push('No GitHub Actions workflows (`.github/workflows/`).');
+    push();
+  }
   if (allCi.length) {
     const byFile = new Map(allCi.map((wf) => [wf.file, wf]));
     const checks = allCi.filter((wf) => wf.checksChanges && !wf.unreadable && runsSomething(wf)).sort(byRank);

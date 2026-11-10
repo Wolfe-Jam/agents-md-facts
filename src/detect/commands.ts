@@ -1,4 +1,4 @@
-import { existsSync } from 'fs';
+import { existsSync, readFileSync } from 'fs';
 import { join } from 'path';
 import type { PackageJson } from './pkg.js';
 
@@ -106,9 +106,21 @@ export function detectCommands(dir: string, pkg: PackageJson | null): Record<str
     if (!commands.test) commands.test = 'go test ./...';
   }
 
-  // Python defaults (if pytest is detectable)
-  if (existsSync(join(dir, 'pyproject.toml')) || existsSync(join(dir, 'pytest.ini'))) {
-    if (!commands.test) commands.test = 'pytest';
+  // Python: pytest, plus the checkers the repo configures; through uv or Poetry when it locks with one.
+  const pyproject = existsSync(join(dir, 'pyproject.toml'));
+  if (pyproject || existsSync(join(dir, 'pytest.ini'))) {
+    let py = '';
+    try { py = pyproject ? readFileSync(join(dir, 'pyproject.toml'), 'utf-8') : ''; } catch { /* unreadable: no tool tables */ }
+    const runner = existsSync(join(dir, 'uv.lock')) ? 'uv run ' : existsSync(join(dir, 'poetry.lock')) ? 'poetry run ' : '';
+    const has = (table: string, ...files: string[]): boolean =>
+      new RegExp(`^\\[tool\\.${table}[\\].]`, 'm').test(py) || files.some((f) => existsSync(join(dir, f)));
+    // The install a locked project needs (a package.json repo shows its own above).
+    if (!pkg && runner === 'uv run ') commands.install = 'uv sync';
+    if (!pkg && runner === 'poetry run ') commands.install = 'poetry install';
+    if (!commands.test) commands.test = `${runner}pytest`;
+    if (!commands.lint && has('ruff', 'ruff.toml', '.ruff.toml')) commands.lint = `${runner}ruff check .`;
+    if (!commands.typecheck && has('mypy', 'mypy.ini', '.mypy.ini')) commands.typecheck = `${runner}mypy .`;
+    if (!commands['format:check'] && has('black')) commands['format:check'] = `${runner}black --check .`;
   }
 
   return commands;

@@ -12,8 +12,9 @@ export interface DetectedRelease {
   /**
    * `publish`: the npm lifecycle hooks `npm publish` runs first, in its order
    * (`prepublishOnly`, then `prepack`). `script`: a `release` script, run by hand.
+   * `none`: a publishable package that declares neither, so `npm publish` runs no checks.
    */
-  kind: 'publish' | 'script';
+  kind: 'publish' | 'script' | 'none';
   scripts: ReleaseScript[];
 }
 
@@ -25,7 +26,8 @@ const PUBLISH_HOOKS = ['prepublishOnly', 'prepack'];
 
 /**
  * The release gate a Node repo declares: the pre-publish lifecycle hooks it
- * has, else a `release` script. Null when there is neither. Pure.
+ * has, else a `release` script, else `none` for a package that can be
+ * published (not `private`). Null for no package.json or a private one. Pure.
  */
 export function detectRelease(pkg: PackageJson | null): DetectedRelease | null {
   const scripts = pkg?.scripts ?? {};
@@ -36,5 +38,6 @@ export function detectRelease(pkg: PackageJson | null): DetectedRelease | null {
   const hooks = PUBLISH_HOOKS.map(pick).filter((s): s is ReleaseScript => s !== null);
   if (hooks.length) return { kind: 'publish', scripts: hooks };
   const release = pick('release');
-  return release ? { kind: 'script', scripts: [release] } : null;
+  if (release) return { kind: 'script', scripts: [release] };
+  return pkg && pkg.private !== true ? { kind: 'none', scripts: [] } : null;
 }

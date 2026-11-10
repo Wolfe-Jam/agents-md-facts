@@ -1,5 +1,5 @@
 <!-- agents:from-facts:start -->
-<!-- authored by agents-md-facts — from your repo's facts, never guessed · re-run to refresh · keep the start/end markers · authored: 2026-11-10T05:31:06.945Z -->
+<!-- authored by agents-md-facts — from your repo's facts, never guessed · re-run to refresh · keep the start/end markers · authored: 2026-11-10T14:16:28.757Z -->
 
 # AGENTS.md — rust
 
@@ -19,6 +19,10 @@ cargo build --release    # build
 cargo test
 cargo clippy
 ```
+
+## CI
+
+No GitHub Actions workflows (`.github/workflows/`).
 
 ## Where things live
 

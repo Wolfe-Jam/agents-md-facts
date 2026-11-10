@@ -55,7 +55,7 @@ jobs:
 
 describe('R2 — what npm publish runs', () => {
   test('`prepublish` is not a publish gate (npm ≥ 7 runs it on install)', () => {
-    expect(detectRelease(JSON.parse(pkg({ scripts: { prepublish: 'tsc' } })))).toBeNull();
+    expect(detectRelease(JSON.parse(pkg({ scripts: { prepublish: 'tsc' } })))).toEqual({ kind: 'none', scripts: [] });
   });
   test('prepublishOnly and prepack both run, in that order', () => {
     const md = author(repo({ 'package.json': pkg({ scripts: { prepack: 'npm run build', prepublishOnly: 'npm test' } }) }));
@@ -241,7 +241,7 @@ describe('G3 — release and chore workflows are named, not copied', () => {
       '.github/workflows/key.yml': wf('workflow_dispatch', 'gh secret set KEY'),
     }));
     expect(md).toContain('npm test');
-    expect(md).not.toContain('npm publish');
+    expect(md).not.toMatch(/^npm publish/m);
     expect(md).not.toContain('gh secret set');
     expect(md).toContain('Also: `.github/workflows/key.yml` (on workflow_dispatch) · `.github/workflows/publish.yml` (on release).');
   });

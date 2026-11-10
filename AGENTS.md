@@ -1,5 +1,5 @@
 <!-- agents:from-facts:start -->
-<!-- authored by agents-md-facts — from your repo's facts, never guessed · re-run to refresh · keep the start/end markers · authored: 2026-11-10T05:31:16.273Z -->
+<!-- authored by agents-md-facts — from your repo's facts, never guessed · re-run to refresh · keep the start/end markers · authored: 2026-11-10T13:42:38.399Z -->
 
 # AGENTS.md — agents-md-facts
 
@@ -40,7 +40,7 @@ The repo's own commands each check runs on a change; everything else is in the w
 `.github/workflows/ci.yml` (on push, pull_request)
 
 ```bash
-# job test · ubuntu-latest
+# job test · ubuntu-latest, windows-latest
 bun run lint
 # 4 other steps in the file
 ```

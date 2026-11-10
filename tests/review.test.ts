@@ -47,8 +47,8 @@ jobs:
       - run: npx wrangler deploy
 `);
     expect(jobs).toEqual([
-      { id: 'test', runsOn: ['ubuntu-latest'], matrix: [], steps: [{ run: 'npm test' }], skipped: 0 },
-      { id: 'deploy', if: "github.ref == 'refs/heads/main'", runsOn: ['ubuntu-latest'], matrix: [], steps: [], skipped: 1 },
+      { id: 'test', runsOn: ['ubuntu-latest'], matrix: [], steps: [{ commands: ['npm test'] }] },
+      { id: 'deploy', if: "github.ref == 'refs/heads/main'", runsOn: ['ubuntu-latest'], matrix: [], steps: [{ commands: ['npx wrangler deploy'] }] },
     ]);
   });
 });
@@ -66,19 +66,19 @@ describe('R2 — what npm publish runs', () => {
 
 describe('R3 — the file stays short', () => {
   test('six workflows of twelve multi-line steps stay under 150 lines', () => {
-    const step = (i: number): string => `      - if: matrix.os == 'ubuntu-latest'\n        run: |\n          echo ${i}\n          echo more\n          echo more\n`;
+    const step = (i: number): string => `      - if: matrix.os == 'ubuntu-latest'\n        run: |\n          npm test -- ${i}\n          npm run lint\n          npm run build\n`;
     const wf = (n: string): string => `on: ${n === 'a' ? 'push' : 'release'}\njobs:\n  j:\n    runs-on: ubuntu-latest\n    steps:\n${Array.from({ length: 12 }, (_, i) => step(i)).join('')}`;
-    const files: Record<string, string> = { 'package.json': pkg({}) };
+    const files: Record<string, string> = { 'package.json': pkg({ scripts: { test: 't', lint: 'l', build: 'b' } }) };
     for (const n of ['a', 'b', 'c', 'd', 'e', 'f']) files[`.github/workflows/${n}.yml`] = wf(n);
     const md = author(repo(files));
     expect(md.split('\n').length).toBeLessThanOrEqual(150);
     expect(md).toContain('`.github/workflows/a.yml` (on push)');
-    expect(md).toContain('# … 2 more lines in this step');
+    expect(md).toContain('# … more in the file');
     expect(md).toMatch(/Also: .*`\.github\/workflows\/f\.yml` \(on release\)\./);
   });
   test('workflows that check pushes come first', () => {
-    const wf = (on: string): string => `on: ${on}\njobs:\n  j:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo ${on}\n`;
-    const md = author(repo({ 'package.json': pkg({}), '.github/workflows/a-release.yml': wf('release'), '.github/workflows/b-ci.yml': wf('pull_request') }));
+    const wf = (on: string): string => `on: ${on}\njobs:\n  j:\n    runs-on: ubuntu-latest\n    steps:\n      - run: npm test\n`;
+    const md = author(repo({ 'package.json': pkg({ scripts: { test: 't' } }), '.github/workflows/a-release.yml': wf('release'), '.github/workflows/b-ci.yml': wf('pull_request') }));
     expect(md.indexOf('b-ci.yml')).toBeLessThan(md.indexOf('a-release.yml'));
   });
 });
@@ -104,14 +104,6 @@ describe('R4/R5 — the hook and the Action run this release', () => {
 
 describe('R6 — only real checks are gates', () => {
   const scripts = { 'test:watch': 'vitest', test: 'vitest run', 'test:e2e': 'playwright test', lint: 'eslint .', 'lint:fix': 'eslint . --fix' };
-  test('watch and fix scripts are not listed', () => {
-    expect(detectCommands(repo({}), JSON.parse(pkg({ scripts })))).toEqual({ test: 'npm test', 'test:e2e': 'npm run test:e2e', lint: 'npm run lint' });
-  });
-  test('the guardrail names `test`; the Definition of Done names only test and lint', () => {
-    const md = author(repo({ 'package.json': pkg({ scripts }) }));
-    expect(md).toContain('run the tests (`npm test`)');
-    expect(md).toContain('Done when: `npm run lint` exits 0 · `npm test` passes · committed with a clear message.');
-  });
 });
 
 describe('R7/R8/R9 — CI read as YAML', () => {
@@ -143,37 +135,28 @@ jobs:
     expect(on).toEqual(['push', 'pull_request']);
     expect(jobs[0]?.runsOn).toEqual(['ubuntu-latest']);
     expect(jobs[0]?.steps).toEqual([
-      { run: 'npm test' },
-      { run: 'npm run build --if-present' },
-      { run: 'npm run smoke', if: "github.event_name == 'push'" },
+      { commands: ['npm test'] },
+      { commands: ['npm run build --if-present'] },
+      { commands: ['npm run smoke'], if: "github.event_name == 'push'" },
+      { commands: ["pnpm i --filter '!docs'"] },
     ]);
   });
   test('runners and matrix belong to their job; a label set is one runner', () => {
     expect(jobs[0]?.matrix).toEqual(['node-version 18, 20']);
-    expect(jobs[1]).toEqual({ id: 'lint', runsOn: ['self-hosted+linux+x64'], matrix: [], steps: [{ run: 'npm run lint' }], skipped: 0 });
+    expect(jobs[1]).toEqual({ id: 'lint', runsOn: ['self-hosted+linux+x64'], matrix: [], steps: [{ commands: ['npm run lint'] }] });
   });
   test('broken YAML adds nothing', () => {
     expect(parseWorkflow('jobs: [unclosed')).toEqual({ on: [], checksChanges: false, jobs: [], unreadable: true });
   });
 });
 
-describe('R10 — a folder is used only when a script names its path', () => {
-  test('`NODE_ENV=test` and `bun test` are not the test folder; `./scripts/x.sh` is scripts', () => {
-    const md = author(repo({
-      'package.json': pkg({ scripts: { start: 'cross-env NODE_ENV=test node src/index.js', ci: 'bun test --coverage', release: './scripts/release.sh', prepare: 'node scripts/setup.js' } }),
-      'test/a.js': '', 'scripts/release.sh': '', 'src/index.js': '',
-    }));
-    expect(md).toContain('- `test/`\n');
-    expect(md).toContain('- `scripts/` — used by `npm run release`, `npm run prepare`');
-  });
-});
 
 describe('R11 — no guessed folder names', () => {
   test('`lib/` and `spec/` get no gloss; `packages/` only when a workspace lists it', () => {
     const plain = author(repo({ 'package.json': pkg({}), 'lib/a.js': '', 'spec/protocol.md': '', 'packages/README.md': '' }));
     expect(plain).toContain('- `lib/`\n');
     expect(plain).toContain('- `packages/`\n');
-    expect(plain).toContain('- `spec/`\n');
+    expect(plain).toMatch(/^- `spec\/`$/m);
     const ws = author(repo({ 'package.json': pkg({ workspaces: ['packages/*'] }), 'packages/a/index.js': '', 'pnpm-workspace.yaml': "packages:\n  - 'packages/*'\n" }));
     expect(ws).toContain('- `packages/` — workspace packages');
     expect(ws).toContain('- `pnpm-workspace.yaml` — pnpm workspace config');
@@ -183,11 +166,11 @@ describe('R11 — no guessed folder names', () => {
 describe('R12 — the command name npm installs', () => {
   test('a scoped package\'s string bin installs without the scope', () => {
     expect(author(repo({ 'package.json': JSON.stringify({ name: '@faf/tool', bin: 'dist/cli.js' }), 'tsconfig.json': '{"compilerOptions":{"outDir":"dist"}}', 'src/cli.ts': '' })))
-      .toContain('- `src/cli.ts` — the `tool` command');
+      .toContain('- `dist/cli.js` — the `tool` command');
   });
   test('no name → no invented command name', () => {
     expect(author(repo({ 'package.json': JSON.stringify({ bin: 'dist/cli.js' }), 'tsconfig.json': '{"compilerOptions":{"outDir":"dist"}}', 'src/cli.ts': '' })))
-      .toContain("- `src/cli.ts` — the package's command (`bin`)");
+      .toContain("- `dist/cli.js` — the package's command (`bin`)");
   });
 });
 
@@ -226,25 +209,7 @@ describe('R16 — headings inside code blocks are not sections', () => {
   });
 });
 
-describe('R17 — entry points from tsconfig and nested exports', () => {
-  test('outDir/rootDir trace `distribution/` back to source', () => {
-    const md = author(repo({
-      'package.json': pkg({ exports: { '.': { import: { types: './distribution/index.d.ts', default: './distribution/index.js' } } } }),
-      'tsconfig.json': '{ "compilerOptions": { "outDir": "distribution", "rootDir": "source" } }',
-      'source/index.ts': '',
-    }));
-    expect(md).toContain('- `source/index.ts` — package entry (`exports`)');
-  });
-});
 
-describe('R19 — the default branch is not assumed', () => {
-  test('git rules name "the default branch", never `main`', () => {
-    const md = author(ROOT);
-    expect(md).toContain('push to the default branch');
-    expect(md).toContain('Branch off the default branch; never commit to it directly');
-    expect(md).not.toContain('`main`');
-  });
-});
 
 /* ── The second review of #7 (goose): G-numbers are its finding numbers ── */
 
@@ -252,7 +217,7 @@ describe('G3 — release and chore workflows are named, not copied', () => {
   test('a publish workflow\'s steps stay out; its file is named', () => {
     const wf = (on: string, run: string): string => `on: ${on}\njobs:\n  j:\n    runs-on: ubuntu-latest\n    steps:\n      - run: ${run}\n`;
     const md = author(repo({
-      'package.json': pkg({}),
+      'package.json': pkg({ scripts: { test: 't' } }),
       '.github/workflows/ci.yml': wf('pull_request', 'npm test'),
       '.github/workflows/publish.yml': wf('release', 'npm publish'),
       '.github/workflows/key.yml': wf('workflow_dispatch', 'gh secret set KEY'),
@@ -267,11 +232,11 @@ describe('G3 — release and chore workflows are named, not copied', () => {
 describe('G4 — a fence inside a step can\'t close the block', () => {
   test('the block\'s fence is longer than any backtick run in it', () => {
     const md = author(repo({
-      'package.json': pkg({}),
-      '.github/workflows/ci.yml': 'on: push\njobs:\n  j:\n    runs-on: ubuntu-latest\n    steps:\n      - run: |\n          ```\n          ok\n      - run: echo "```"\n',
+      'package.json': pkg({ scripts: { x: 'node x.mjs' } }),
+      '.github/workflows/ci.yml': 'on: push\njobs:\n  j:\n    runs-on: ubuntu-latest\n    steps:\n      - run: npm run x -- "```"\n',
     }));
     expect(md).toContain('````bash\n');
-    expect(md).toContain('echo "```"\n````');
+    expect(md).toContain('npm run x -- "```"\n````');
   });
 });
 
@@ -327,17 +292,6 @@ describe('G9 — wrangler main: top level, no comments', () => {
   });
 });
 
-describe('G10 — "used by" needs a path', () => {
-  test('`npm test`, `playwright test` and `rm -rf generated` use no folder', () => {
-    const md = author(repo({
-      'package.json': pkg({ scripts: { verify: 'npm run lint && npm test', 'test:e2e': 'playwright test', clean: 'rm -rf generated/', smoke: 'bash ./scripts/smoke.sh' } }),
-      'test/a.js': '', 'generated/x': '', 'scripts/smoke.sh': '',
-    }));
-    expect(md).toContain('- `test/`\n');
-    expect(md).toContain('- `generated/`\n');
-    expect(md).toContain('- `scripts/` — used by `npm run smoke`');
-  });
-});
 
 describe('G11 — entry points say what the manifest says', () => {
   test('a bundled bin is not traced by name to a same-named source file', () => {
@@ -345,18 +299,14 @@ describe('G11 — entry points say what the manifest says', () => {
       'package.json': pkg({ bin: { x: 'dist/cli.js' }, scripts: { build: 'esbuild src/main.ts --bundle --outfile=dist/cli.js' } }),
       'src/main.ts': '', 'src/cli.ts': '',
     }));
-    expect(md).toContain('- `dist/cli.js` — the `x` command (built by `npm run build`)');
+    expect(md).toContain('- `dist/cli.js` — the `x` command');
     expect(md).not.toContain('`src/cli.ts` — the');
   });
   test('`main` is a package entry, not a "library"; an exports array is read', () => {
     expect(author(repo({ 'package.json': pkg({ main: 'dist/extension.js' }), 'tsconfig.json': '{"compilerOptions":{"outDir":"dist"}}', 'src/extension.ts': '' })))
-      .toContain('- `src/extension.ts` — package entry (`main`)');
+      .toContain('- `dist/extension.js` — package entry (`main`)');
     expect(author(repo({ 'package.json': pkg({ exports: { '.': ['./dist/a.js'] }, main: 'dist/index.js' }), 'tsconfig.json': '{"compilerOptions":{"outDir":"dist"}}', 'src/a.ts': '', 'src/index.ts': '' })))
-      .toContain('- `src/a.ts` — package entry (`exports`)');
-  });
-  test('rootDir "." (dist/src/index.js) is traced', () => {
-    expect(author(repo({ 'package.json': pkg({ main: 'dist/src/index.js' }), 'tsconfig.json': '{"compilerOptions":{"outDir":"dist"}}', 'src/index.ts': '' })))
-      .toContain('- `src/index.ts` — package entry (`main`)');
+      .toContain('- `dist/a.js` — package entry (`exports`)');
   });
   test('a file with a popular name and no manifest entry is not listed', () => {
     expect(author(repo({ 'package.json': pkg({}), 'src/index.ts': '' }))).not.toContain('Entry points');
@@ -376,7 +326,7 @@ describe('G17 — contributing headings as plain text', () => {
       'package.json': pkg({}),
       'CONTRIBUTING.md': '## Why C#\n## Use [Langfuse](https://x.y)\n## A ##\n## B\n## C\n## D\n## E\n',
     }));
-    expect(md).toContain('- Follow `CONTRIBUTING.md` (Why C# · Use Langfuse · A · B · C · D · …).');
+    expect(md).toContain('- `CONTRIBUTING.md` — Why C# · Use Langfuse · A · B · C · D · …');
   });
 });
 
@@ -389,9 +339,9 @@ describe('G18/G19 — odd manifests', () => {
   });
 });
 
-describe('G15 — a step\'s directory and shell are shown', () => {
-  test('working-directory and shell from the step or the job default', () => {
+describe('G15 — a step\'s directory is shown', () => {
+  test('working-directory from the step or the job default', () => {
     const { jobs } = parseWorkflow('on: push\njobs:\n  j:\n    runs-on: windows-latest\n    defaults:\n      run:\n        shell: pwsh\n    steps:\n      - run: npm run lint\n        working-directory: ./sibling/\n');
-    expect(jobs[0]?.steps).toEqual([{ run: 'npm run lint', dir: 'sibling', shell: 'pwsh' }]);
+    expect(jobs[0]?.steps).toEqual([{ commands: ['npm run lint'], dir: 'sibling' }]);
   });
 });

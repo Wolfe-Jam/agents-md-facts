@@ -21,27 +21,6 @@ const ROLES: RegExp[] = [
 const NOT_A_CHECK = /:(watch|fix|ui|dev|update|debug|open|serve)([:-]|$)/;
 
 /**
- * A command that changes files (`eslint --fix`, `prettier --write`, `jest -u`):
- * never a check. Short flags count only after the tool where they mean that:
- * `-w` is npm's `--workspace` and jest's `--maxWorkers`, `-u` is mocha's `--ui`.
- */
-const WRITES = /\s(--fix|--write|--update-snapshot|--updateSnapshot)(\s|=|$)|\b(jest|vitest)\b[^&|;]*\s-u(\s|$)|\bprettier\b[^&|;]*\s-w(\s|$)/;
-
-/**
- * The checks the Definition of Done names: the plain `test`, `lint` and
- * typecheck scripts. Other `test:*` scripts are listed to run, not required:
- * the repo doesn't say they must pass.
- */
-export function isGateScript(name: string): boolean {
-  return /^(test|lint|typecheck|type-check|check-types|check)$/.test(name);
-}
-
-/** True for a script name that plays the build role (`build`, `compile`, `bundle`). */
-export function isBuildScript(name: string): boolean {
-  return /^(build|compile|bundle)$/.test(name);
-}
-
-/**
  * How this repo runs a package.json script, in its own package manager's
  * spelling: `npm test` and `npm start` (npm's own shorthands), `npm run x`
  * otherwise; `bun run x` (bare `bun test` runs Bun's test runner, not the
@@ -84,11 +63,10 @@ export function detectCommands(dir: string, pkg: PackageJson | null): Record<str
   if (pkg?.scripts) {
     const pm = nodePackageManager(dir, pkg);
     const names = Object.keys(pkg.scripts)
+      // By name only: what a script's command does isn't judged.
       .filter((k) => {
         const cmd = pkg.scripts?.[k];
-        if (typeof cmd !== 'string' || !cmd.trim() || NOT_A_CHECK.test(k)) return false;
-        // A lint or test script that writes files isn't a check (build and dev scripts may write).
-        return !(/^(test|lint|format|check|typecheck|type-check)/.test(k) && WRITES.test(` ${cmd}`));
+        return typeof cmd === 'string' && cmd.trim() !== '' && !NOT_A_CHECK.test(k);
       });
     for (const role of ROLES) {
       for (const k of names) if (role.test(k)) commands[k] = scriptCommand(pm, k);

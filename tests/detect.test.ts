@@ -70,17 +70,17 @@ describe('conventions', () => {
     expect(detectConventions(nodeTs, readPackageJson(nodeTs))).toEqual([
       'TypeScript strict mode (tsconfig.json)',
       'ESM modules (`type: module`)',
-      'Style enforced by ESLint · Prettier — obey the configs',
+      'Style: ESLint · Prettier configs',
     ]);
   });
   test('python → black · ruff · mypy', () => {
     expect(detectConventions(python, null)).toEqual([
-      'Style enforced by black · ruff · mypy — obey the configs',
+      'Style: black · ruff · mypy configs',
     ]);
   });
   test('rust → rustfmt', () => {
     expect(detectConventions(rust, null)).toEqual([
-      'Style enforced by rustfmt — obey the configs',
+      'Style: rustfmt configs',
     ]);
   });
   test('go → none', () => {

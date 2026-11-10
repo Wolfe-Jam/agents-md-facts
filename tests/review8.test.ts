@@ -69,20 +69,6 @@ describe('C1 / G8-2 — a markerless file is replaced only when it is exactly th
   });
 });
 
-describe('C2 / G8-1 — the install filter drops installs only', () => {
-  const runs = (step: string): string[] => parseWorkflow(wf('push', [step])).jobs[0]?.steps.map((s) => s.run) ?? [];
-  test('scripts and chains are kept', () => {
-    for (const s of ['yarn build', 'yarn test --coverage', 'yarn lint', 'npm ci && npm run build', 'pnpm install && pnpm test', 'bun i && bun test']) {
-      expect(runs(s)).toEqual([s]);
-    }
-  });
-  test('installs with flags are dropped', () => {
-    for (const s of ['npm ci', 'npm ci --prefix web', 'yarn --immutable', 'yarn install --frozen-lockfile', "pnpm i --filter '!docs'", 'bun install']) {
-      expect(runs(s)).toEqual([]);
-    }
-  });
-});
-
 describe('C3 — a local build doesn\'t change the output', () => {
   test('a gitignored dist/ file is not the source', () => {
     const files = {
@@ -95,21 +81,23 @@ describe('C3 — a local build doesn\'t change the output', () => {
     writeFileSync(join(dir, 'dist/cli.js'), '');
     writeFileSync(join(dir, 'dist/index.js'), '');
     expect(author(dir)).toBe(before);
-    expect(before).toContain('- `dist/cli.js` — the `tool` command (built by `npm run build`)');
+    expect(before).toContain('- `dist/cli.js` — the `tool` command (not in git; the build script is `npm run build`)');
   });
 });
 
 describe('C4 / G8-3 — which workflows the CI section shows', () => {
-  test('the main check comes first; a publish step is left out, not copied', () => {
+  test('only the repo\'s own commands are copied; other steps stay in the files', () => {
     const md = author(repo({
-      'package.json': pkg({}),
+      'package.json': pkg({ scripts: { test: 't', build: 'b' } }),
       '.github/workflows/autofix.yml': wf('pull_request', Array.from({ length: 30 }, (_, i) => `echo fix-${i}`)),
       '.github/workflows/cr.yml': wf('pull_request', ['pnpm build', 'pnpm exec pkg-pr-new publish --compact']),
       '.github/workflows/ci.yml': wf('[push, pull_request]', ['pnpm test']),
     }));
-    expect(md.indexOf('`.github/workflows/ci.yml`')).toBeLessThan(md.indexOf('autofix.yml'));
     expect(md).toContain('pnpm test');
+    expect(md).toContain('pnpm build');
     expect(md).not.toContain('pkg-pr-new publish');
+    expect(md).not.toContain('echo fix');
+    expect(md).toContain('Also: `.github/workflows/autofix.yml` (on pull_request).');
   });
   test('a tags-only push and pull_request_target are named, not copied', () => {
     const md = author(repo({
@@ -123,7 +111,7 @@ describe('C4 / G8-3 — which workflows the CI section shows', () => {
   });
   test('a reusable workflow is shown under the job that calls it', () => {
     const md = author(repo({
-      'package.json': pkg({}),
+      'package.json': pkg({ scripts: { test: 't' } }),
       '.github/workflows/ci.yml': 'on: [pull_request]\njobs:\n  test:\n    uses: ./.github/workflows/test.yml\n',
       '.github/workflows/test.yml': 'on: workflow_call\njobs:\n  unit:\n    runs-on: ubuntu-latest\n    steps:\n      - run: npm test\n',
     }));
@@ -139,34 +127,9 @@ describe('C4 / G8-3 — which workflows the CI section shows', () => {
 });
 
 describe('C5 — workflow-level defaults.run', () => {
-  test('directory and shell come from the workflow when the job and step set none; paths normalised', () => {
+  test('the directory comes from the workflow when the job and step set none; paths normalised', () => {
     const { jobs } = parseWorkflow('on: push\ndefaults:\n  run:\n    working-directory: ./web/\n    shell: pwsh\njobs:\n  j:\n    runs-on: ubuntu-latest\n    steps:\n      - run: npm run lint\n');
-    expect(jobs[0]?.steps).toEqual([{ run: 'npm run lint', dir: 'web', shell: 'pwsh' }]);
-  });
-});
-
-describe('C6 / G8-4 — entry points traced only for a plain tsc build', () => {
-  for (const build of ['tsdown', 'bunchee', 'microbundle', 'node build.mjs', 'turbo run build']) {
-    test(`\`${build}\` → the declared path, not a same-named file`, () => {
-      const md = author(repo({ 'package.json': pkg({ bin: { x: 'dist/cli.js' }, scripts: { build } }), 'src/cli.ts': '', 'src/main.ts': '' }));
-      expect(md).toContain('- `dist/cli.js` — the `x` command (built by `npm run build`)');
-    });
-  }
-  test('`tsc -p tsconfig.build.json` is not traced: that config can set another rootDir', () => {
-    const md = author(repo({
-      'package.json': pkg({ bin: { x: 'dist/cli.js' }, scripts: { build: 'tsc -p tsconfig.build.json && node -e "require(\'fs\').copyFileSync(\'a\',\'b\')"' } }),
-      'src/cli.ts': '',
-    }));
-    expect(md).toContain('- `dist/cli.js` — the `x` command (built by `npm run build`)');
-  });
-  test('a commented tsconfig option is ignored; `extends` is followed', () => {
-    const md = author(repo({
-      'package.json': pkg({ main: 'out/index.js' }),
-      'tsconfig.json': '{\n  // "outDir": "old",\n  "extends": "./tsconfig.base.json",\n  "compilerOptions": { "outDir": "out" }\n}\n',
-      'tsconfig.base.json': '{ "compilerOptions": { "rootDir": "lib2" } }',
-      'lib2/index.ts': '', 'src/index.ts': '',
-    }));
-    expect(md).toContain('- `lib2/index.ts` — package entry (`main`)');
+    expect(jobs[0]?.steps).toEqual([{ commands: ['npm run lint'], dir: 'web' }]);
   });
 });
 
@@ -179,14 +142,6 @@ describe('C7 / G8-9 — workspace and toolchain notes only from what the files s
     }));
     expect(md).toContain('- `esbuild/`\n');
     expect(md).toContain('- `packages/` — workspace packages');
-  });
-  test('main.go is listed only when it is `package main`', () => {
-    expect(author(repo({ 'go.mod': 'module x\n', 'main.go': 'package x\n' }))).not.toContain('main.go');
-    expect(author(repo({ 'go.mod': 'module x\n', 'main.go': 'package main\n' }))).toContain('- `main.go` — Go `package main`');
-  });
-  test('Cargo `[lib] path` replaces the src/lib.rs default', () => {
-    const md = author(repo({ 'Cargo.toml': '[package]\nname = "x"\n\n[lib]\npath = "src/mylib.rs"\n', 'src/lib.rs': '', 'src/mylib.rs': '' }));
-    expect(md).not.toContain('src/lib.rs');
   });
   test('turbo.json is Turborepo config', () => {
     expect(author(repo({ 'package.json': pkg({}), 'turbo.json': '{}' }))).toContain('- `turbo.json` — Turborepo config');
@@ -208,18 +163,15 @@ describe('C9 — CommonMark fences and setext headings in CONTRIBUTING', () => {
 });
 
 describe('C11 / G8-5 — labels stay comments on one line', () => {
-  test('a multi-line if: and name: become one comment line each', () => {
+  test('a multi-line if: becomes one comment line; a step name is never copied', () => {
     const md = author(repo({
-      'package.json': pkg({}),
-      '.github/workflows/ci.yml': "on: push\njobs:\n  j:\n    runs-on: ubuntu-latest\n    steps:\n      - name: |\n          Harmless\n          rm -rf ~\n        if: |\n          github.event_name == 'push' ||\n          github.event_name == 'merge_group'\n        run: |\n          echo a\n          echo b\n",
+      'package.json': pkg({ scripts: { a: 'x', b: 'y' } }),
+      '.github/workflows/ci.yml': "on: push\njobs:\n  j:\n    runs-on: ubuntu-latest\n    steps:\n      - name: |\n          Harmless\n          rm -rf ~\n        if: |\n          github.event_name == 'push' ||\n          github.event_name == 'merge_group'\n        run: |\n          npm run a\n          npm run b\n",
     }));
-    expect(md).toContain("# if: github.event_name == 'push' || github.event_name == 'merge_group'\n# step \"Harmless rm -rf ~\": 2-line script in the file");
+    expect(md).toContain("# if: github.event_name == 'push' || github.event_name == 'merge_group'\nnpm run a\nnpm run b");
+    expect(md).not.toContain('Harmless');
     expect(md).not.toMatch(/^github\.event_name/m);
     expect(md).not.toMatch(/^rm -rf ~/m);
-  });
-  test('a name with an expression isn\'t used as a label', () => {
-    const md = author(repo({ 'package.json': pkg({}), '.github/workflows/ci.yml': 'on: push\njobs:\n  j:\n    runs-on: ubuntu-latest\n    steps:\n      - name: ${{ matrix.node }} build\n        run: |\n          set -e\n          npm run build\n' }));
-    expect(md).toContain('npm run build\n# … 1 more line in this step');
   });
 });
 
@@ -239,23 +191,12 @@ describe('G8-6 — YAML edge cases', () => {
 
 describe('C12 — a token in a run: line is masked', () => {
   test('a GitHub token typed into a step never reaches AGENTS.md', () => {
-    const md = author(repo({ 'package.json': pkg({}), '.github/workflows/ci.yml': wf('push', ["\"curl -H 'Authorization: token ghp_abcdefghijklmnopqrstuvwxyz0123' https://x\""]) }));
+    const md = author(repo({ 'package.json': pkg({ scripts: { test: 't' } }), '.github/workflows/ci.yml': wf('push', ['"npm test -- --token ghp_abcdefghijklmnopqrstuvwxyz0123"']) }));
     expect(md).not.toContain('ghp_');
-    expect(md).toContain('token <token>');
+    expect(md).toContain('npm test -- --token <token>');
   });
 });
 
-describe('G8-9 — scripts that write or only delete', () => {
-  test('`lint` that runs `--fix` is not a check', () => {
-    expect(detectCommands(repo({}), JSON.parse(pkg({ scripts: { lint: 'eslint . --fix', test: 'vitest run', 'test:watch:ci': 'vitest' } }))))
-      .toEqual({ test: 'npm test' });
-  });
-  test('`rimraf dist && tsc -p src/` uses src/; `cd e2e && playwright test` uses e2e/', () => {
-    const md = author(repo({ 'package.json': pkg({ scripts: { build: 'rimraf dist && tsc -p src/', e2e: 'cd e2e && playwright test' } }), 'src/a.ts': '', 'e2e/a.ts': '' }));
-    expect(md).toContain('- `src/` — used by `npm run build`');
-    expect(md).toContain('- `e2e/` — end-to-end tests, used by `npm run e2e`');
-  });
-});
 
 describe('Release pins (C10 / G8-8)', () => {
   const version = (JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf-8')) as { version: string }).version;

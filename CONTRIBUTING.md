@@ -8,18 +8,26 @@ contributions that keep it small and focused are the most welcome.
 > **A line earns its place only if it resolves real ambiguity** (or caches
 > expensive exploration an agent would otherwise repeat).
 
-Everything this tool authors is a **detected fact** or a **curated default**.
-It never guesses, pads, or restates rules a linter already enforces — the
-research is clear that padding an instruction file *hurts* agent task-success.
-When you add a detector or a section, ask: does this line tell an agent
-something it could not cheaply learn itself? If not, drop it.
+The block is a set of facts, not instructions: the repo's own commands,
+layout, conventions and pointers, each read from a file the repo declares.
+Instructions (guardrails, what "done" means, commit rules) belong to the
+hand-written part of AGENTS.md, outside the markers. It never guesses, pads,
+or restates rules a linter already enforces — the research is clear that
+padding an instruction file *hurts* agent task-success. When you add a
+detector or a section, ask: does this line tell an agent something it could
+not cheaply learn itself? If not, drop it.
 
-Two rules that follow from the filter:
+Three rules that follow from the filter:
+
+- **Declared, not judged.** A line is read straight from a declared field
+  (a script name, a manifest entry, a workflow trigger). Deciding what a
+  command does (is it an install, a publish, a build of that file?) is out:
+  an omission is never a false line.
 
 - **Facts, not opinions.** A section is emitted only when detection produces
   content for it. No "detected nothing, so here's a plausible default" filler.
 - **Point, don't restate.** For toolchain-governed conventions, point at the
-  config ("obey `tsconfig.json`") instead of copying its rules into prose.
+  config (`tsconfig.json`, `.eslintrc`) instead of copying its rules into prose.
 
 ## Develop
 

@@ -1,5 +1,5 @@
 import { existsSync, readdirSync, readFileSync } from 'fs';
-import { dirname, join, normalize } from 'path';
+import { join } from 'path';
 import { parse as parseYaml } from 'yaml';
 import type { PackageJson } from './pkg.js';
 import { scriptCommand } from './commands.js';
@@ -20,9 +20,6 @@ export interface DetectedLayout {
 /** Build output, dependencies and caches: outside git, never part of the map. */
 const SKIP = new Set(['node_modules', 'dist', 'build', 'out', 'coverage', 'target', '__pycache__', 'venv', 'zig-out', 'zig-cache']);
 
-/** Folders that usually hold build output, when a path points into one. */
-const OUTPUT_DIRS = ['dist', 'build', 'out', 'lib'];
-
 /**
  * What a conventionally named folder holds, only where the name alone doesn't
  * say it and has one common meaning (a curated default). `docs/ — docs` would
@@ -41,7 +38,6 @@ const WORKSPACE_FILES: Array<[string, string]> = [
   ['turbo.json', 'Turborepo config'],
 ];
 
-const escape = (s: string): string => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const read = (path: string): string | null => {
   try { return readFileSync(path, 'utf-8'); } catch { return null; }
 };
@@ -123,122 +119,6 @@ function workspaceRoots(dir: string, pkg: PackageJson | null): Set<string> {
     .filter(Boolean));
 }
 
-/**
- * True when a script uses `folder`: a command in it names the folder as a path
- * (`folder/…`, `./folder`) or `cd`s into it. A bare word is not a path (`npm test`,
- * `playwright test`, `NODE_ENV=test`), and a delete (`rm -rf`, `rimraf`) is not a use.
- */
-function scriptUsesFolder(command: string, folder: string): boolean {
-  const f = escape(folder);
-  const path = new RegExp(`(?:^|[\\s"'(=,])(?:\\./${f}(?=[/\\s"')]|$)|${f}/)`);
-  const cd = new RegExp(`^\\s*cd\\s+(?:\\./)?${f}/?\\s*$`);
-  return command.split(/&&|\|\||;|\|/).some((seg) => !/^\s*(rm|rimraf|del|trash)\b/.test(seg) && (path.test(seg) || cd.test(seg)));
-}
-
-/**
- * tsconfig's `outDir` and `rootDir`, comments allowed, following relative
- * `extends` (a string or an array, later entries win; up to five levels). A
- * path is relative to the config that sets it. With no `rootDir`, an `include`
- * of one folder stands in for it; an `include` of several means the root can't
- * be told, so nothing is traced.
- */
-function tsDirs(dir: string): { outDir: string; rootDirs: string[] } | null {
-  type Found = { value: unknown; from: string };
-  const found: Record<'outDir' | 'rootDir' | 'include', Found | undefined> = { outDir: undefined, rootDir: undefined, include: undefined };
-  const visit = (file: string, depth: number): boolean => {
-    const cfg = readJsonc(join(dir, file));
-    if (!cfg) return false;
-    const from = dirname(file);
-    const opts = (cfg.compilerOptions && typeof cfg.compilerOptions === 'object' ? cfg.compilerOptions : {}) as Record<string, unknown>;
-    if (found.outDir === undefined && opts.outDir !== undefined) found.outDir = { value: opts.outDir, from };
-    if (found.rootDir === undefined && opts.rootDir !== undefined) found.rootDir = { value: opts.rootDir, from };
-    if (found.include === undefined && cfg.include !== undefined) found.include = { value: cfg.include, from };
-    if (depth >= 5) return true;
-    const ext = typeof cfg.extends === 'string' ? [cfg.extends] : Array.isArray(cfg.extends) ? cfg.extends : [];
-    // Later entries win, so they are read first; a package (`@tsconfig/node20`) isn't read.
-    for (const e of [...ext].reverse()) {
-      if (typeof e !== 'string' || !e.startsWith('.')) continue;
-      const f = normalize(join(from, e.endsWith('.json') ? e : `${e}.json`));
-      visit(f, depth + 1);
-    }
-    return true;
-  };
-  if (!visit('tsconfig.json', 0)) return null;
-  const clean = (p: string, from: string): string => normalize(join(from, p)).replace(/\\/g, '/').replace(/\/$/, '') || '.';
-  const out = found.outDir;
-  if (!out || typeof out.value !== 'string') return null;
-  const outDir = clean(out.value, out.from);
-  const root = found.rootDir;
-  if (root && typeof root.value === 'string') return { outDir, rootDirs: [clean(root.value, root.from)] };
-  const inc = found.include;
-  if (inc && Array.isArray(inc.value)) {
-    const folders = [...new Set(inc.value.map((g) => (typeof g === 'string' ? /^(?:\.\/)?([^*?/[]+)(?:\/.*)?$/.exec(g)?.[1] : undefined)))];
-    const one = folders[0];
-    return folders.length === 1 && one && !/\.\w+$/.test(one) ? { outDir, rootDirs: [clean(one, inc.from)] } : { outDir, rootDirs: [] };
-  }
-  return { outDir, rootDirs: ['src', '.'] };
-}
-
-/** tsc flags that change what it reads or where it writes: then `dist/x.js` may not come from `src/x.ts`. */
-const TSC_REDIRECTS = /\s(-p|--project|-b|--build|--outDir|--rootDir|--outFile|--rootDirs)(\s|=|$)/;
-
-/**
- * True when a build command compiles with plain `tsc` (no `-p`, `--outDir`,
- * `--rootDir`, `-b`) and otherwise only cleans or makes folders. `npm run x`
- * steps are followed into the scripts they run. Only then does `dist/x.js`
- * come from a same-named `src/x.ts`; a bundler, a copy or a build file can
- * take any input.
- */
-function plainTscBuild(command: string, scripts: Record<string, string> = {}, depth = 0): boolean | 'clean' {
-  const segs = command.split(/&&|\|\||;|\|/).map((s) => s.trim()).filter(Boolean);
-  let tsc = false;
-  for (const seg of segs) {
-    const ref = /^(?:npm|pnpm|yarn|bun)\s+(?:run\s+)?([\w:.-]+)$/.exec(seg)?.[1];
-    if (ref && scripts[ref] !== undefined && depth < 3) {
-      const r = plainTscBuild(scripts[ref], scripts, depth + 1);
-      if (r === false) return false;
-      if (r === true) tsc = true;
-      continue;
-    }
-    if (/^tsc(\s|$)/.test(seg)) { if (TSC_REDIRECTS.test(` ${seg}`)) return false; tsc = true; continue; }
-    if (/^(rimraf|rm|del|mkdir|shx\s+(rm|mkdir)|chmod)(\s|$)/.test(seg) || /^node -e\s/.test(seg)) continue;
-    return false;
-  }
-  return tsc ? true : 'clean';
-}
-
-/**
- * Entry points a toolchain defines by convention when its manifest names none,
- * checked against the files: Cargo's `src/main.rs` / `src/lib.rs` (unless
- * Cargo.toml sets another path), Zig roots that `build.zig` names, and a root
- * `main.go` that is `package main`.
- */
-function toolchainEntries(dir: string): LayoutEntry[] {
-  const out: LayoutEntry[] = [];
-  const cargo = read(join(dir, 'Cargo.toml'));
-  if (cargo !== null) {
-    // `path =` inside the `[lib]` table (it ends at the next line starting with `[`).
-    const lib = /^\[lib\][^\n]*\n((?:(?!\s*\[)[^\n]*\n?)*)/m.exec(cargo)?.[1] ?? '';
-    const libPath = /^\s*path\s*=/m.test(lib);
-    const virtual = /^\[workspace\]/m.test(cargo) && !/^\[package\]/m.test(cargo);
-    const noAutoBins = /\bautobins\s*=\s*false/.test(cargo);
-    if (!virtual && !noAutoBins && existsSync(join(dir, 'src/main.rs'))) out.push({ path: 'src/main.rs', note: 'binary crate root (Cargo default)' });
-    if (!virtual && !libPath && existsSync(join(dir, 'src/lib.rs'))) out.push({ path: 'src/lib.rs', note: 'library crate root (Cargo default)' });
-  }
-  const zig = read(join(dir, 'build.zig'))?.replace(/\/\/.*$/gm, '') ?? null;
-  if (zig !== null) {
-    for (const f of ['src/main.zig', 'src/root.zig']) {
-      if (zig.includes(`"${f}"`) && existsSync(join(dir, f))) out.push({ path: f, note: 'named in build.zig' });
-    }
-  }
-  const goMain = read(join(dir, 'main.go')) ?? '';
-  // `//go:build ignore` marks a generator script run by `go run`, not the program.
-  if (existsSync(join(dir, 'go.mod')) && /^\s*package\s+main\b/m.test(goMain) && !/^\/\/go:build\s+ignore\b/m.test(goMain)) {
-    out.push({ path: 'main.go', note: 'Go `package main`' });
-  }
-  return out;
-}
-
 /** The path `exports['.']` resolves to, through condition objects and fallback arrays. */
 function exportsEntry(exp: unknown, depth = 0): string | null {
   if (typeof exp === 'string') return /\.d\.[cm]?ts$/.test(exp) ? null : exp;
@@ -259,75 +139,34 @@ function exportsEntry(exp: unknown, depth = 0): string | null {
 /**
  * The repo's map, from what it declares: each top-level folder with a note
  * (a wrangler `main` inside it, a workspace listing it, a name that needs
- * explaining, the scripts that use it), any monorepo config, then the entry
- * points: what the manifest names (`bin`, `exports`, `main`), traced to source
- * only for a plain `tsc` build, else shown as declared; or the toolchain's own
- * default. Whether a file "is in the repo" comes from git when there is git, so
- * a local build can't change the output.
+ * explaining), any monorepo config, then the entry points exactly as the
+ * manifest names them (`bin`, `exports`, `main`). A declared path git doesn't
+ * track says so, with the build script's name; nothing is traced to a source
+ * file, which would mean judging what the build does.
  */
 export function detectLayout(dir: string, pkg: PackageJson | null, pm: string, tracked: GitFiles | null): DetectedLayout {
   const worker = wranglerMain(dir);
-  const scripts = Object.entries(pkg?.scripts ?? {}).filter((e): e is [string, string] => typeof e[1] === 'string');
-  const names = new Set(scripts.map(([k]) => k));
-  // `pre<x>` / `post<x>` run with `<x>`; listing both is noise.
-  const lifecycle = (k: string): boolean => /^(pre|post)/.test(k) && names.has(k.replace(/^(pre|post)/, ''));
   const workspaces = workspaceRoots(dir, pkg);
 
   const folders = topFolders(dir, tracked).map((name): LayoutEntry => {
-    const notes: string[] = [];
-    if (worker && worker.main.startsWith(`${name}/`)) notes.push(`Cloudflare Worker (\`${worker.config}\` main: \`${worker.main}\`)`);
-    else if (workspaces.has(name)) notes.push('workspace packages');
-    else if (NAMES[name]) notes.push(NAMES[name]);
-    const users = scripts.filter(([k, v]) => !lifecycle(k) && scriptUsesFolder(v, name)).map(([k]) => `\`${scriptCommand(pm, k)}\``);
-    if (users.length) notes.push(`used by ${users.slice(0, 4).join(', ')}${users.length > 4 ? ', …' : ''}`);
-    return { path: `${name}/`, note: notes.length ? notes.join(', ') : null };
+    const note = worker && worker.main.startsWith(`${name}/`) ? `Cloudflare Worker (\`${worker.config}\` main: \`${worker.main}\`)`
+      : workspaces.has(name) ? 'workspace packages'
+        : NAMES[name] ?? null;
+    return { path: `${name}/`, note };
   });
   for (const [f, note] of WORKSPACE_FILES) if (existsSync(join(dir, f))) folders.push({ path: f, note });
 
-  // A file is part of the repo when git tracks it; outside git, when it exists and isn't build output.
-  const ts = tsDirs(dir);
-  // A folder tsconfig names as the source root (`rootDir: lib`) is source, not output.
-  const outputs = [...new Set([...(ts ? [ts.outDir] : []), ...OUTPUT_DIRS])].filter((o) => !ts?.rootDirs.includes(o));
-  const underOutput = (p: string): string | undefined => outputs.find((o) => p.startsWith(`${o}/`));
-  const inRepo = (p: string): boolean => (tracked ? tracked.files.has(p) : existsSync(join(dir, p)) && !underOutput(p));
-  // Every script that may write the output (a build-named or publish-time script, or one
-  // that runs a bundler, whatever its name) must be plain tsc; tsconfig alone is a tsc build.
-  const allScripts = Object.fromEntries(scripts);
-  const BUNDLER = /(^|[\s/])(tsup|tsdown|esbuild|rollup|vite|webpack|bunchee|unbuild|swc|babel|ncc|parcel|pkgroll|microbundle)(\s|$)|\bbun build\b/;
-  const builders = scripts.filter(([k, v]) => /^(build|compile|bundle)([:-]|$)/.test(k)
-    || (/^(prepare|prepack|prepublishOnly)$/.test(k) && !/^\s*(husky|is-ci)\b/.test(v))
-    || BUNDLER.test(v));
-  const verdicts = builders.map(([, v]) => plainTscBuild(v, allScripts));
-  const traceable = !verdicts.includes(false) && (verdicts.includes(true) || ts !== null);
-  const buildScript = scripts.find(([k]) => /^(build|compile|bundle)$/.test(k)) ?? builders[0];
-  const built = buildScript ? ` (built by \`${scriptCommand(pm, buildScript[0])}\`)` : '';
-
-  /** The source behind a declared path: itself when it's in the repo, else a same-named source for a plain tsc build. */
-  const sourceOf = (declared: string): string | null => {
-    const p = declared.replace(/^\.\//, '');
-    if (inRepo(p)) return p;
-    const out = underOutput(p);
-    if (!out || !traceable) return null;
-    const rest = p.slice(out.length + 1).replace(/\.(c|m)?js$/, '');
-    for (const root of ts && out === ts.outDir ? ts.rootDirs : ['src']) {
-      const stem = root === '.' ? rest : `${root}/${rest}`;
-      for (const ext of ['.ts', '.tsx', '.mts', '.cts', '.js', '.mjs', '.cjs']) {
-        if (inRepo(stem + ext)) return stem + ext;
-      }
-    }
-    return null;
-  };
+  const buildScript = Object.keys(pkg?.scripts ?? {}).find((k) => /^(build|compile|bundle)$/.test(k));
+  const untracked = buildScript ? ` (not in git; the build script is \`${scriptCommand(pm, buildScript)}\`)` : ' (not in git)';
 
   const entries: LayoutEntry[] = [];
   const seen = new Set<string>();
-  const add = (path: string, note: string): void => {
-    if (!seen.has(path)) { seen.add(path); entries.push({ path, note }); }
-  };
-  /** The source when it can be traced, else the declared path itself, marked as built. */
+  /** The declared path; in a git repo, marked when git doesn't track it. */
   const place = (target: string, note: string): void => {
-    const src = sourceOf(target);
-    if (src) add(src, note);
-    else add(target.replace(/^\.\//, ''), `${note}${built}`);
+    const path = target.replace(/^\.\//, '');
+    if (seen.has(path)) return;
+    seen.add(path);
+    entries.push({ path, note: tracked && !tracked.files.has(path) ? `${note}${untracked}` : note });
   };
   if (pkg?.bin) {
     // A string `bin` installs under the package name without its scope; with no name, no command name.
@@ -344,6 +183,5 @@ export function detectLayout(dir: string, pkg: PackageJson | null, pm: string, t
   const exp = exportsEntry(pkg?.exports);
   if (exp) place(exp, 'package entry (`exports`)');
   else if (typeof pkg?.main === 'string' && pkg.main.trim()) place(pkg.main.trim(), 'package entry (`main`)');
-  if (!entries.length) for (const e of toolchainEntries(dir)) add(e.path, e.note ?? '');
   return { folders, entries };
 }

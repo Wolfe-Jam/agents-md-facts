@@ -9,8 +9,6 @@ import { tmpdir } from 'os';
 import { dirname, join } from 'path';
 import { authorAgentsMd } from '../src/author.ts';
 import { buildRepoContext } from '../src/context.ts';
-import { detectCommands } from '../src/detect/commands.ts';
-import { commandsOf, parseWorkflow, ships } from '../src/detect/ci.ts';
 import { detectContributing } from '../src/detect/contributing.ts';
 import { gitFiles } from '../src/detect/git.ts';
 import { extractBlock, injectBlock, MarkerError, wrapBlock } from '../src/inject.ts';
@@ -136,83 +134,10 @@ describe('N1 / K5 — git: big repos, subfolders, git missing', () => {
   });
 });
 
-describe('K2 / N2 — WRITES: only flags that mean "write" in that tool', () => {
-  test.each([
-    ['jest -w 2', 'jest --maxWorkers'],
-    ['npm test -w packages/core', 'npm --workspace'],
-    ['mocha -u tdd', 'mocha --ui'],
-    ['curl -u me:x host && jest', 'curl user'],
-  ])('`%s` is still the test command (%s)', (cmd) => {
-    expect(detectCommands('/nonexistent', { scripts: { test: cmd } })).toEqual({ test: 'npm test' });
-  });
-  test.each(['jest -u', 'vitest run -u', 'prettier -w .', 'eslint . --fix'])('`%s` writes files: not a check', (cmd) => {
-    expect(detectCommands('/nonexistent', { scripts: { lint: cmd } })).toEqual({});
-  });
-  test('`test:update-snapshots` is not a check', () => {
-    expect(detectCommands('/nonexistent', { scripts: { 'test:update-snapshots': 'jest' } })).toEqual({});
-  });
-});
-
-describe('K3 / N4 — SHIPS: per command, at its start', () => {
-  test.each([
-    'npm publish --dry-run', 'pnpm publish --dry-run --no-git-checks', 'cargo publish --dry-run',
-    'git push --dry-run origin HEAD', 'gh release view v1.0.0', 'gh release list',
-    'echo "remember: npm publish happens; git push later"', 'npm test',
-  ])('`%s` is not a ship', (cmd) => {
-    expect(commandsOf(cmd).some(ships)).toBe(false);
-  });
-  test.each([
-    'npx semantic-release', 'docker push ghcr.io/x/y:latest', 'vercel deploy --prod', 'uv publish', 'npm run deploy',
-    'npx firebase deploy', 'npm run release', 'pnpm -r publish', 'pnpm --filter x publish', 'lerna publish',
-    'git -c user.name=x push origin HEAD', 'NODE_AUTH_TOKEN=x npm publish', 'pnpm exec pkg-pr-new publish --compact',
-    'docker buildx build . --push -t x',
-  ])('`%s` ships', (cmd) => {
-    expect(commandsOf(cmd).every(ships)).toBe(true);
-  });
-  test('a step that builds and pushes is kept, with a note; one that only ships is counted', () => {
-    const dir = repo({
-      'package.json': pkg({}),
-      '.github/workflows/ci.yml': wf('pull_request', ['npm run build && git push', 'npm publish']),
-    });
-    const md = author(dir);
-    expect(md).toContain('# part of this step publishes / deploys / pushes\nnpm run build && git push');
-    expect(md).toContain('# 1 publish / deploy / push step left out');
-  });
-  test('push to main only, and label-only pull requests, are named, not copied', () => {
-    expect(parseWorkflow('on:\n  push:\n    branches: [main]\njobs: {}\n').checksChanges).toBe(false);
-    expect(parseWorkflow('on:\n  pull_request:\n    types: [labeled, unlabeled]\njobs: {}\n').checksChanges).toBe(false);
-    expect(parseWorkflow('on:\n  push:\n    branches: [main]\n  pull_request:\njobs: {}\n').checksChanges).toBe(true);
-    expect(parseWorkflow('on:\n  pull_request:\n    types: [opened, labeled]\njobs: {}\n').checksChanges).toBe(true);
-    expect(parseWorkflow('on: push\njobs: {}\n').checksChanges).toBe(true);
-  });
-});
-
-describe('K9 / N5 — INSTALL: a flag never swallows a script name', () => {
-  test.each(['yarn --silent test', 'yarn -s lint'])('`%s` is kept', (cmd) => {
-    expect(runs(wf('pull_request', [cmd]))).toEqual([cmd]);
-  });
-  test.each(['npm ci --prefix web', 'pnpm i --filter "!docs"', 'pnpm install -w', 'yarn --immutable', 'yarn install --network-timeout 100000'])(
-    '`%s` is an install', (cmd) => { expect(runs(wf('pull_request', [cmd]))).toEqual([]); },
-  );
-});
-
-describe('K6 / N6 / N7 — CI ranking and reusable workflows', () => {
-  test('a fix / changelog helper ranks after the test workflows', () => {
-    const md = author(repo({
-      'package.json': pkg({}),
-      '.github/workflows/check-changelog.yml': wf('pull_request', ['yarn check-changelog']),
-      '.github/workflows/lint-autofix.yml': wf('pull_request', ['pnpm lint:js:fix']),
-      '.github/workflows/nodejs.yml': wf('pull_request', ['yarn jest']),
-      '.github/workflows/tests-e2e.yml': wf('pull_request', ['pnpm e2e']),
-    }));
-    const at = (f: string): number => md.indexOf(`\`.github/workflows/${f}\``);
-    expect(at('tests-e2e.yml')).toBeLessThan(at('nodejs.yml'));
-    expect(at('nodejs.yml')).toBeLessThan(at('check-changelog.yml'));
-    expect(at('nodejs.yml')).toBeLessThan(at('lint-autofix.yml'));
-  });
+describe('N7 — reusable workflows', () => {
   test("a callee's own call is named; a callee job with nothing kept isn't printed", () => {
     const md = author(repo({
-      'package.json': pkg({}),
+      'package.json': pkg({ scripts: { test: 't', deepcheck: 'd' } }),
       '.github/workflows/ci.yml': 'on: pull_request\njobs:\n  a:\n    uses: ./.github/workflows/reuse.yml\n',
       '.github/workflows/reuse.yml': 'on: workflow_call\njobs:\n  inner:\n    runs-on: ubuntu-latest\n    steps:\n      - run: npm test\n'
         + '  cache:\n    runs-on: ubuntu-latest\n    steps:\n      - run: npm ci\n'
@@ -231,53 +156,10 @@ describe('N8 — job-level labels stay on one line; tokens are masked in labels'
     const yaml = 'on: pull_request\njobs:\n  j:\n    runs-on: |\n      self-hosted\n      rm -rf /\n'
       + '    strategy:\n      matrix:\n        node: ["18\\nrm -rf ~", 20]\n'
       + `    steps:\n      - name: tok ${tok} here\n        if: github.token == '${tok}'\n        run: |\n          npm test\n          npm run lint\n`;
-    const md = author(repo({ 'package.json': pkg({}), '.github/workflows/ci.yml': yaml }));
+    const md = author(repo({ 'package.json': pkg({ scripts: { test: 't', lint: 'l' } }), '.github/workflows/ci.yml': yaml }));
+    expect(md).toContain('npm test\nnpm run lint');
     expect(md).not.toMatch(/^rm -rf/m);
     expect(md).not.toContain(tok);
-  });
-});
-
-describe('K4 / N3 — entry points: traced only when every build is plain tsc', () => {
-  const traced = (scripts: Record<string, string>, files: Record<string, string>): string =>
-    author(repo({ 'package.json': pkg({ main: 'dist/index.js', scripts }), 'src/index.ts': '', ...files }));
-  test.each([
-    [{ build: 'tsc -p tsconfig.build.json' }, {}],
-    [{ build: 'tsc --outDir dist --rootDir lib' }, {}],
-    [{ build: 'tsc && cp bundle/index.js dist/index.js' }, {}],
-    [{ build: 'tsc || esbuild src/main.ts --outfile=dist/index.js' }, {}],
-    [{ 'build:js': 'esbuild src/main.ts --bundle --outfile=dist/index.js' }, { 'tsconfig.json': '{"compilerOptions":{"outDir":"dist"}}' }],
-    [{ prepare: 'tsup src/entry.ts' }, { 'tsconfig.json': '{"compilerOptions":{"outDir":"dist"}}' }],
-    [{ dist: 'tsup src/entry.ts' }, { 'tsconfig.json': '{"compilerOptions":{"outDir":"dist"}}' }],
-  ] as [Record<string, string>, Record<string, string>][])('%j is not traced', (scripts, files) => {
-    expect(traced(scripts, files)).not.toContain('- `src/index.ts`');
-  });
-  test('`npm run clean && npm run build:ts` is followed: plain tsc, traced', () => {
-    expect(traced({ build: 'npm run clean && npm run build:ts', clean: 'rimraf dist', 'build:ts': 'tsc' }, {}))
-      .toContain('- `src/index.ts` — package entry (`main`)');
-  });
-  test('an `extends` array is read, later entries win', () => {
-    const md = traced({ build: 'tsc' }, {
-      'tsconfig.json': '{"extends":["./a.json","./b.json"]}',
-      'a.json': '{"compilerOptions":{"outDir":"dist","rootDir":"src"}}',
-      'b.json': '{"compilerOptions":{"rootDir":"lib"}}',
-      'lib/index.ts': '',
-    });
-    expect(md).toContain('- `lib/index.ts` — package entry (`main`)');
-  });
-  test('a two-level `extends` chain is followed', () => {
-    const md = traced({ build: 'tsc' }, {
-      'tsconfig.json': '{"extends":"./cfg/a.json"}',
-      'cfg/a.json': '{"extends":"./b.json"}',
-      'cfg/b.json': '{"compilerOptions":{"outDir":"../dist","rootDir":"../lib"}}',
-      'lib/index.ts': '',
-    });
-    expect(md).toContain('- `lib/index.ts` — package entry (`main`)');
-  });
-  test('no rootDir: a one-folder `include` is the root; several folders trace nothing', () => {
-    expect(traced({ build: 'tsc' }, { 'tsconfig.json': '{"compilerOptions":{"outDir":"dist"},"include":["lib"]}', 'lib/index.ts': '' }))
-      .toContain('- `lib/index.ts` — package entry (`main`)');
-    expect(traced({ build: 'tsc' }, { 'tsconfig.json': '{"compilerOptions":{"outDir":"dist"},"include":["lib","src"]}' }))
-      .toContain('- `dist/index.js` — package entry (`main`)');
   });
 });
 
@@ -288,19 +170,7 @@ describe('K7 — CONTRIBUTING headings', () => {
   });
 });
 
-describe('K8 / N9 — toolchain defaults checked against the manifest', () => {
-  test('Cargo `[lib]` with an array before `path`; a virtual workspace', () => {
-    expect(author(repo({ 'Cargo.toml': '[package]\nname = "x"\n\n[lib]\ncrate-type = ["cdylib"]\npath = "src/mylib.rs"\n', 'src/lib.rs': '', 'src/mylib.rs': '' })))
-      .not.toContain('`src/lib.rs` — library crate root');
-    expect(author(repo({ 'Cargo.toml': '[workspace]\nmembers = ["a"]\n', 'src/main.rs': '' })))
-      .not.toContain('binary crate root');
-  });
-  test('a commented build.zig line; a `//go:build ignore` main.go', () => {
-    expect(author(repo({ 'build.zig': '// .root_source_file = b.path("src/main.zig"),\n', 'src/main.zig': '' })))
-      .not.toContain('named in build.zig');
-    expect(author(repo({ 'go.mod': 'module x\n', 'main.go': '//go:build ignore\n\npackage main\n' })))
-      .not.toContain('Go `package main`');
-  });
+describe('N9 — workspace roots', () => {
   test('a literal workspace path is one package, not a root of packages', () => {
     const md = author(repo({ 'package.json': pkg({ workspaces: ['./tools/x', 'packages/*'] }), 'tools/x/package.json': '{}', 'packages/a/package.json': '{}' }));
     expect(md).toContain('`packages/` — workspace packages');

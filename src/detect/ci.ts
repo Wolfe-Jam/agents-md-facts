@@ -2,21 +2,21 @@ import { existsSync, readdirSync, readFileSync } from 'fs';
 import { join } from 'path';
 import { parse } from 'yaml';
 
-/** One CI step that runs a command. */
+/** One CI step, reduced to the commands in it that call the repo's own scripts or listed commands. */
 export interface CiStep {
-  /** The command, verbatim (token-shaped strings masked). A folded (`>`) block is already one line. */
-  run: string;
+  /** Those commands, each as written (on one line, token-shaped strings masked). */
+  commands: string[];
   /** The step's own `if:` condition, on one line. */
   if?: string;
-  /** The step's `name:`, on one line. */
-  name?: string;
   /** Where it runs, when not the repo root: step, then job, then workflow `defaults.run`. */
   dir?: string;
-  /** Its shell, when set and not bash / sh: step, then job, then workflow `defaults.run`. */
-  shell?: string;
-  /** Part of the step publishes, deploys or pushes (the rest is a check). */
-  ships?: true;
 }
+
+/**
+ * True when a command calls something the repo declares: a package.json script
+ * (in the folder the step runs in) or a command this file already lists.
+ */
+export type Known = (command: string, dir: string | undefined) => boolean;
 
 /** One job of a workflow. */
 export interface CiJob {
@@ -29,8 +29,6 @@ export interface CiJob {
   /** Matrix axes, e.g. `node 22, 24`; `include: N more` when it adds legs; a note when set by an expression. */
   matrix: string[];
   steps: CiStep[];
-  /** Steps left out because they publish, deploy or push. */
-  skipped: number;
   /** A local reusable workflow this job calls (`uses: ./.github/workflows/x.yml`), as a repo path. */
   calls?: string;
 }
@@ -51,30 +49,6 @@ export interface DetectedWorkflow {
   /** True when the file isn't valid YAML; it is named, never guessed at. */
   unreadable?: boolean;
 }
-
-/**
- * A dependency install alone on its line: every agent already knows it. Only
- * flags may follow (`npm ci --prefix web`, `pnpm i --filter x`); a chain
- * (`npm ci && npm test`) or a script (`yarn test`) is a check, and is kept.
- */
-const INSTALL = /^(npm (ci|i|install)|bun (i|install)|pnpm (i|install)|yarn( install)?)(\s+((--prefix|--filter|--cwd|--registry|--network-timeout|-C|-F)(=\S+|\s+[^\s&|;<>-]\S*)|--?[\w-]+(=\S+)?))*\s*$/;
-
-/**
- * One command that publishes, deploys or pushes: never a check an agent should
- * run. Matched at the start of a command (after any `VAR=x` and `npx`), so a
- * mention in an `echo` doesn't count; a `--dry-run` is a check, not a ship.
- */
-const SHIP_CMD = new RegExp('^(?:sudo\\s+)?(?:(?:npx|pnpx|bunx|(?:pnpm|yarn) dlx|(?:npm|pnpm|yarn) exec)(?:\\s+-\\S+)*\\s+)?(?:' + [
-  '(?:npm|pnpm|yarn|bun)(?:\\s+-\\S+(?:\\s+[^-\\s]\\S*)?)*\\s+publish\\b',
-  '(?:npm|pnpm|yarn|bun)\\s+(?:run\\s+)?(?:deploy|release)(?::\\S+)?\\s*$',
-  '(?:lerna|pkg-pr-new|changeset|mcp-publisher|vsce|ovsx|cargo|uv|poetry)\\s+publish\\b',
-  'git(?:\\s+-[cC]\\s+\\S+)*\\s+push\\b',
-  'gh\\s+(?:pr\\s+(?:create|merge|edit|comment)|release\\s+(?:create|upload|edit|delete))\\b',
-  'wrangler\\s+(?:deploy|publish)\\b', 'twine\\s+upload\\b', 'gem\\s+push\\b',
-  'docker\\s+push\\b', 'docker\\s+buildx\\s+build\\b.*\\s--push\\b',
-  'semantic-release\\b', 'goreleaser\\b', 'vercel\\b.*\\s--prod\\b', 'netlify\\s+deploy\\b',
-  'firebase\\s+deploy\\b', 'fly(?:ctl)?\\s+deploy\\b',
-].join('|') + ')');
 
 /**
  * Split a `run:` script into its commands at newlines, `&&`, `||`, `;` and `|`,
@@ -102,12 +76,6 @@ export function commandsOf(script: string): string[] {
   }
   flush();
   return out;
-}
-
-/** True when this one command publishes, deploys or pushes. */
-export function ships(command: string): boolean {
-  const c = command.replace(/^(\w+=\S*\s+)+/, '');
-  return SHIP_CMD.test(c) && !/\s--dry-run\b/.test(c);
 }
 
 /** Token shapes that must never be copied into AGENTS.md, even if a workflow has one inline. */
@@ -158,7 +126,7 @@ function checksChanges(on: unknown): boolean {
   return false;
 }
 
-function readJob(id: string, job: Obj, wfDefaults: Obj): CiJob {
+function readJob(id: string, job: Obj, wfDefaults: Obj, known: Known): CiJob {
   const strategy = isObj(job.strategy) ? job.strategy : {};
   const matrixRaw = strategy.matrix;
   const matrix = isObj(matrixRaw) ? matrixRaw : {};
@@ -186,25 +154,17 @@ function readJob(id: string, job: Obj, wfDefaults: Obj): CiJob {
 
   const jobDefaults = isObj(job.defaults) && isObj(job.defaults.run) ? job.defaults.run : {};
   const steps: CiStep[] = [];
-  let skipped = 0;
   for (const step of Array.isArray(job.steps) ? job.steps : []) {
     if (!isObj(step)) continue;
     const raw = scalar(step.run);
-    if (!raw || INSTALL.test(raw)) continue;
-    const cmds = commandsOf(raw);
-    const shipping = cmds.filter(ships).length;
-    if (shipping && shipping === cmds.length) { skipped++; continue; }
-    const out: CiStep = { run: raw.replace(TOKEN, '<token>') };
-    if (shipping) out.ships = true;
+    if (!raw) continue;
+    const dir = oneLine(cleanDir(scalar(step['working-directory']) ?? scalar(jobDefaults['working-directory']) ?? scalar(wfDefaults['working-directory'])));
+    const commands = commandsOf(raw).map((c) => oneLine(c) ?? '').filter((c) => c && known(c, dir ?? undefined));
+    if (!commands.length) continue;
+    const out: CiStep = { commands };
     const cond = oneLine(scalar(step.if));
     if (cond) out.if = cond;
-    const name = oneLine(scalar(step.name));
-    if (name) out.name = name;
-    const dir = oneLine(cleanDir(scalar(step['working-directory']) ?? scalar(jobDefaults['working-directory']) ?? scalar(wfDefaults['working-directory'])));
     if (dir) out.dir = dir;
-    // bash / sh is what a reader assumes for a `run:` block; only another shell is worth a line.
-    const shell = oneLine(scalar(step.shell) ?? scalar(jobDefaults.shell) ?? scalar(wfDefaults.shell));
-    if (shell && !/^(bash|sh)\b/.test(shell)) out.shell = shell;
     steps.push(out);
   }
 
@@ -217,7 +177,6 @@ function readJob(id: string, job: Obj, wfDefaults: Obj): CiJob {
       ...notes,
     ],
     steps,
-    skipped,
   };
   const cond = oneLine(scalar(job.if));
   if (cond) out.if = cond;
@@ -232,7 +191,7 @@ function readJob(id: string, job: Obj, wfDefaults: Obj): CiJob {
  * `if:` stays with its job, comments are dropped and folded blocks read as the
  * shell sees them. A file that isn't valid YAML is `unreadable`. Pure.
  */
-export function parseWorkflow(text: string): Omit<DetectedWorkflow, 'file'> {
+export function parseWorkflow(text: string, known: Known = () => true): Omit<DetectedWorkflow, 'file'> {
   let doc: unknown;
   try {
     doc = parse(text, { merge: true });
@@ -244,14 +203,14 @@ export function parseWorkflow(text: string): Omit<DetectedWorkflow, 'file'> {
   const jobs: CiJob[] = [];
   if (isObj(doc.jobs)) {
     for (const [id, job] of Object.entries(doc.jobs)) {
-      if (isObj(job)) jobs.push(readJob(id, job, wfDefaults));
+      if (isObj(job)) jobs.push(readJob(id, job, wfDefaults, known));
     }
   }
   return { on: triggers(doc.on), checksChanges: checksChanges(doc.on), jobs };
 }
 
 /** Every GitHub Actions workflow in the repo, by file name, readable or not. Pure. */
-export function detectCi(dir: string): DetectedWorkflow[] {
+export function detectCi(dir: string, known: Known = () => true): DetectedWorkflow[] {
   const wf = join(dir, '.github', 'workflows');
   if (!existsSync(wf)) return [];
   let files: string[];
@@ -264,7 +223,44 @@ export function detectCi(dir: string): DetectedWorkflow[] {
   for (const f of files) {
     let text: string;
     try { text = readFileSync(join(wf, f), 'utf-8'); } catch { continue; }
-    out.push({ file: `.github/workflows/${f}`, ...parseWorkflow(text) });
+    out.push({ file: `.github/workflows/${f}`, ...parseWorkflow(text, known) });
   }
   return out;
+}
+
+/** Subcommands pnpm and yarn run themselves; `pnpm install` is never a script call. */
+const BUILTIN = new Set(('add audit bin cache config create dedupe deploy dlx env exec fetch import info init install i link '
+  + 'list ls login logout npm outdated pack patch prune publish rebuild remove rm root run set store unlink up update '
+  + 'upgrade version why workspace workspaces').split(' '));
+
+/**
+ * The repo's own commands, for matching CI lines: a package.json script called
+ * as `npm test` / `npm run x`, `pnpm x` / `pnpm run x`, `yarn x`, `bun run x`
+ * (read from the package.json in the folder the step runs in), or a command
+ * already listed (`cargo test`). Anything else a workflow runs isn't judged; it
+ * is left in the file.
+ */
+export function ownCommands(repoDir: string, listed: string[]): Known {
+  const cache = new Map<string, Set<string>>();
+  const scriptsIn = (sub: string): Set<string> => {
+    let names = cache.get(sub);
+    if (!names) {
+      names = new Set();
+      try {
+        const pkg = JSON.parse(readFileSync(join(repoDir, sub, 'package.json'), 'utf-8')) as { scripts?: unknown };
+        if (isObj(pkg.scripts)) for (const k of Object.keys(pkg.scripts)) names.add(k);
+      } catch { /* no package.json there: no scripts */ }
+      cache.set(sub, names);
+    }
+    return names;
+  };
+  return (command, dir) => {
+    const c = command.replace(/^(\w+=\S*\s+)+/, '');
+    if (!dir && listed.some((l) => c === l || c.startsWith(`${l} `))) return true;
+    const m = /^(npm|pnpm|yarn|bun)\s+(?:(run|run-script)\s+)?([^\s-]\S*)/.exec(c);
+    if (!m) return false;
+    const [, pm, run, name = ''] = m;
+    if (!run && (pm === 'bun' || (pm === 'npm' ? !/^(test|t|start)$/.test(name) : BUILTIN.has(name)))) return false;
+    return scriptsIn(dir ?? '').has(pm === 'npm' && name === 't' ? 'test' : name);
+  };
 }

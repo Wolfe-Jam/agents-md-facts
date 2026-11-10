@@ -2,7 +2,7 @@ import { basename } from 'path';
 import { readPackageJson } from './detect/pkg.js';
 import { detectCommands, nodePackageManager } from './detect/commands.js';
 import { detectRelease, type DetectedRelease } from './detect/release.js';
-import { detectCi, type DetectedWorkflow } from './detect/ci.js';
+import { detectCi, ownCommands, type DetectedWorkflow } from './detect/ci.js';
 import { detectContributing, type DetectedContributing } from './detect/contributing.js';
 import { detectLayout, type DetectedLayout } from './detect/layout.js';
 import { gitFiles } from './detect/git.js';
@@ -66,6 +66,7 @@ export function buildRepoContext(dir: string): RepoContext {
   // One read of git: whether this is a work tree, and what it tracks (throws when git refuses).
   const tracked = gitFiles(dir);
 
+  const commands = detectCommands(dir, pkg);
   return {
     dir,
     name: pkg?.name ?? basename(dir),
@@ -78,11 +79,11 @@ export function buildRepoContext(dir: string): RepoContext {
     kind: detectKind(dir, pkg),
     hasNodeManifest: pkg != null,
     isGitRepo: tracked !== null,
-    commands: detectCommands(dir, pkg),
+    commands,
     keyFiles: detectKeyFiles(dir),
     layout: detectLayout(dir, pkg, nodePackageManager(dir, pkg), tracked),
     release: detectRelease(pkg),
-    ci: detectCi(dir),
+    ci: detectCi(dir, ownCommands(dir, Object.values(commands))),
     contributing: detectContributing(dir),
     conventions: detectConventions(dir, pkg),
     secrets: detectSecrets(dir),

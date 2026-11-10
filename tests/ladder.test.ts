@@ -68,7 +68,7 @@ jobs:
           npm run build:validator
           git diff --exit-code -- worker/validator.cjs
 `;
-  test('runners, versions and steps; installs left out; conditions kept', () => {
+  test('runners, versions and each step\'s commands; conditions kept', () => {
     expect(parseWorkflow(WF)).toEqual({
       on: ['push'],
       checksChanges: true,
@@ -77,21 +77,22 @@ jobs:
         runsOn: ['ubuntu-latest', 'windows-latest'],
         matrix: ['node 22, 24'],
         steps: [
-          { run: 'npm test' },
-          { run: 'npm run coverage:checks', if: "matrix.os == 'ubuntu-latest'", name: 'Coverage' },
-          { run: 'npm run build:validator\ngit diff --exit-code -- worker/validator.cjs', name: 'Drift' },
+          { commands: ['npm ci'] },
+          { commands: ['npm test'] },
+          { commands: ['npm run coverage:checks'], if: "matrix.os == 'ubuntu-latest'" },
+          { commands: ['npm run build:validator', 'git diff --exit-code -- worker/validator.cjs'] },
         ],
-        skipped: 0,
       }],
     });
   });
-  test('the CI section names the workflow file and its commands', () => {
-    const md = author(repo({ 'package.json': pkg({}), '.github/workflows/ci.yml': WF }));
+  test('the CI section names the workflow file and the repo commands it runs, nothing else', () => {
+    const scripts = { test: 'node --test', 'coverage:checks': 'c8', 'build:validator': 'node b.mjs' };
+    const md = author(repo({ 'package.json': pkg({ scripts }), '.github/workflows/ci.yml': WF }));
     expect(md).toContain('`.github/workflows/ci.yml` (on push)');
-    expect(md).toContain('# job verify · ubuntu-latest, windows-latest · node 22, 24');
-    expect(md).toContain('# step "Drift": 2-line script in the file');
-    expect(md).toContain("# if: matrix.os == 'ubuntu-latest'\nnpm run coverage:checks");
+    expect(md).toContain('# job verify · ubuntu-latest, windows-latest · node 22, 24\nnpm test\n');
+    expect(md).toContain("# if: matrix.os == 'ubuntu-latest'\nnpm run coverage:checks\nnpm run build:validator");
     expect(md).not.toContain('npm ci');
+    expect(md).not.toContain('git diff');
   });
   test('a workflow that only uses actions is named, not copied', () => {
     const md = author(repo({ 'package.json': pkg({}), '.github/workflows/pages.yml': 'jobs:\n  a:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/deploy-pages@v4\n' }));
@@ -103,13 +104,12 @@ jobs:
 describe('A3 — the contributing guide', () => {
   test('pointed to, with its headings, not copied', () => {
     const md = author(repo({ 'package.json': pkg({}), 'CONTRIBUTING.md': '# Contributing\n\n## A wrong verdict\n\nOpen an issue.\n\n## Code\n\n- A new check needs a test.\n' }));
-    expect(md).toContain('- Follow `CONTRIBUTING.md` (A wrong verdict · Code).');
+    expect(md).toContain('## Contributing\n\n- `CONTRIBUTING.md` — A wrong verdict · Code');
     expect(md).not.toContain('A new check needs a test');
   });
   test('found in .github/ too, and shown outside a git repo', () => {
     const md = author(repo({ '.github/CONTRIBUTING.md': '# How to help\n' }));
-    expect(md).toContain('## Commit & PR');
-    expect(md).toContain('- Follow `.github/CONTRIBUTING.md`.');
+    expect(md).toContain('## Contributing\n\n- `.github/CONTRIBUTING.md`');
   });
 });
 
@@ -142,7 +142,7 @@ describe('A5 — the repo\'s own command spelling', () => {
 });
 
 describe('A6 — where things live', () => {
-  test('top-level folders with what the repo says they are; entry points traced to source', () => {
+  test('top-level folders with what the repo says they are; entry points as declared', () => {
     const dir = repo({
       'package.json': pkg({
         bin: { 'card-check': 'dist/cli.js', 'mcp-card-check': 'dist/cli.js' },
@@ -155,18 +155,18 @@ describe('A6 — where things live', () => {
     });
     const md = author(dir);
     expect(md).toContain('- `schema/`\n');
-    expect(md).toContain('- `scripts/` — used by `npm run smoke`');
-    expect(md).toContain('- `test/` — used by `npm test`');
-    // `-p worker` is a bare word, not a path: no "used by" claim from it.
+    // Script bodies aren't read: no "used by" notes.
+    expect(md).toContain('- `scripts/`\n');
+    expect(md).toContain('- `test/`\n');
     expect(md).toContain('- `worker/` — Cloudflare Worker (`wrangler.jsonc` main: `worker/index.ts`)\n');
-    expect(md).toContain('- `src/cli.ts` — the `card-check` and `mcp-card-check` commands');
-    expect(md).toContain('- `src/lib.ts` — package entry (`exports`)');
+    expect(md).toContain('- `dist/cli.js` — the `card-check` and `mcp-card-check` commands');
+    expect(md).toContain('- `dist/lib.js` — package entry (`exports`)');
     expect(md).not.toContain('`dist/`');
     expect(md).not.toContain('node_modules');
   });
-  test('no manifest entry → the toolchain\'s own default, named as such', () => {
+  test('no manifest entry → no entry points (a toolchain convention isn\'t declared)', () => {
     const md = author(repo({ 'Cargo.toml': '[package]\nname = "x"\n', 'src/main.rs': '' }));
-    expect(md).toContain('Entry points:\n\n- `src/main.rs` — binary crate root (Cargo default)');
+    expect(md).not.toContain('Entry points');
   });
 });
 
@@ -183,10 +183,9 @@ describe('A8 — the Node version', () => {
 });
 
 describe('A9 — renamed scripts', () => {
-  test('`compile` is the build: listed, and counted for "build the project"', () => {
+  test('`compile` is the build: listed', () => {
     const md = author(repo({ 'package.json': pkg({ scripts: { compile: 'tsc', test: 'node --test' } }) }));
     expect(md).toContain('npm run compile    # compile');
-    expect(md).toContain('build the project');
   });
   test('test:* and format:check are verify commands', () => {
     const dir = repo({ 'package.json': pkg({ scripts: { test: 'a', 'test:coverage': 'b', 'format:check': 'c', format: 'd' } }) });

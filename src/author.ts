@@ -1,4 +1,5 @@
 import type { RepoContext } from './context.js';
+import { isBuildScript, isGateScript } from './detect/commands.js';
 import type { CiJob, DetectedWorkflow } from './detect/ci.js';
 
 /**
@@ -125,6 +126,9 @@ export function authorAgentsMd(ctx: RepoContext, now: Date = new Date()): string
   // lint + typecheck (+ other *check*) — verify bar, not setup
   const lintCmds = entries.filter(([k]) => /lint|check/i.test(k) && !/test/i.test(k));
   const setupCmds = entries.filter(([k]) => !/test|lint|check/i.test(k));
+  // The guardrail names the plain `test` script when there is one.
+  const testCmd = (testCmds.find(([k]) => k === 'test') ?? testCmds[0])?.[1];
+  const buildCmd = setupCmds.find(([k]) => isBuildScript(k))?.[1];
   // Full verify list for "Run the tests" (tests first, then lint/typecheck)
   const verifyCmds = [...testCmds, ...lintCmds];
 
@@ -231,16 +235,22 @@ export function authorAgentsMd(ctx: RepoContext, now: Date = new Date()): string
   // (A hand-built context without `layout` keeps the older flat list of key files.)
   const { folders, entries: entryPoints } = ctx.layout
     ?? { folders: [], entries: ctx.keyFiles.map((path) => ({ path, note: null })) };
-  if (folders.length || entryPoints.length) {
+  // v0.1.0's key files (manifests, entry files, docs, config) that exist, unless already shown above.
+  const shownPaths = new Set([...folders, ...entryPoints].map((e) => e.path));
+  const keyFiles = ctx.layout ? ctx.keyFiles.filter((f) => !shownPaths.has(f)) : [];
+  if (folders.length || entryPoints.length || keyFiles.length) {
     push('## Where things live');
     push();
     for (const f of folders) push(f.note ? `- \`${f.path}\` — ${f.note}` : `- \`${f.path}\``);
-    if (entryPoints.length) {
-      if (folders.length) push();
-      push('Entry points:');
+    const list = (title: string, items: { path: string; note: string | null }[]): void => {
+      if (!items.length) return;
+      if (lines[lines.length - 1] !== '') push();
+      push(title);
       push();
-      for (const e of entryPoints) push(e.note ? `- \`${e.path}\` — ${e.note}` : `- \`${e.path}\``);
-    }
+      for (const e of items) push(e.note ? `- \`${e.path}\` — ${e.note}` : `- \`${e.path}\``);
+    };
+    list('Entry points:', entryPoints);
+    list('Key files:', keyFiles.map((path) => ({ path, note: null })));
     push();
   }
 
@@ -252,21 +262,54 @@ export function authorAgentsMd(ctx: RepoContext, now: Date = new Date()): string
     push();
   }
 
-  // §6 Secrets — where they are, when a secrets file exists (a fact, no advice)
+  // §6 Guardrails — three tiers, derived from detection where possible
+  const always = ['read files'];
+  if (testCmd) always.push(`run the tests (\`${testCmd}\`)`);
+  if (buildCmd) always.push('build the project');
+  const never = ['force-push'];
+  if (ctx.isGitRepo) never.push('push to the default branch');
+  never.push('commit secrets');
+  if (ctx.secrets) never.push(`commit \`${ctx.secrets.secrets}\``);
+  push('## Guardrails');
+  push();
+  push(`- **Always OK:** ${always.join(', ')}.`);
+  push('- **Ask first:** dependency installs, deletions, migrations / schema changes.');
+  push(`- **Never:** ${never.join(', ')}.`);
+  push();
+
+  // §7 Definition of Done — composed from detected lint + test commands
+  const dod: string[] = [];
+  for (const [k, v] of lintCmds) if (isGateScript(k)) dod.push(`\`${v}\` exits 0`);
+  for (const [k, v] of testCmds) if (isGateScript(k)) dod.push(`\`${v}\` passes`);
+  dod.push('committed with a clear message');
+  push('## Definition of Done');
+  push();
+  push(`Done when: ${[...new Set(dod)].join(' · ')}.`);
+  push();
+
+  // §8 Security & secrets — only when a secrets file was detected (location only)
   if (ctx.secrets) {
-    push('## Secrets');
+    push('## Security & secrets');
     push();
-    push(`- \`${ctx.secrets.secrets}\`${ctx.secrets.example ? ` (example: \`${ctx.secrets.example}\`)` : ''}`);
+    const ex = ctx.secrets.example ? ` (see \`${ctx.secrets.example}\`)` : '';
+    push(`- Secrets live in \`${ctx.secrets.secrets}\`${ex}. Never read or commit them.`);
     push();
   }
 
-  // §7 Contributing — the guide the repo has, and what it covers
-  if (ctx.contributing) {
-    const secs = ctx.contributing.sections;
-    const covers = secs.length ? ` — ${secs.slice(0, 6).join(' · ')}${secs.length > 6 ? ' · …' : ''}` : '';
-    push('## Contributing');
+  // §9 Commit & PR — a sane static default (a repo without git has no PRs)
+  if (ctx.isGitRepo || ctx.contributing) {
+    push('## Commit & PR');
     push();
-    push(`- \`${ctx.contributing.file}\`${covers}`);
+    if (ctx.contributing) {
+      const secs = ctx.contributing.sections;
+      const covers = secs.length ? ` (${secs.slice(0, 6).join(' · ')}${secs.length > 6 ? ' · …' : ''})` : '';
+      push(`- Follow \`${ctx.contributing.file}\`${covers}.`);
+    }
+    if (ctx.isGitRepo) {
+      push('- Write a clear, descriptive commit message.');
+      push('- Branch off the default branch; never commit to it directly — open a PR for review.');
+      push('- If build/test scripts or layout change, refresh this file in the **same PR** (`npx agents-md-facts`).');
+    }
     push();
   }
 

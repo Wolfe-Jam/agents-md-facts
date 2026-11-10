@@ -3,8 +3,8 @@ import { join } from 'path';
 import type { PackageJson } from './pkg.js';
 
 /**
- * Detect the toolchain that governs code conventions. Emits POINTERS (which
- * configs exist), never restated lint rules — restating toolchain-enforced rules is a
+ * Detect the toolchain that governs code conventions. Emits POINTERS ("obey the
+ * configs"), never restated lint rules — restating toolchain-enforced rules is a
  * known AGENTS.md anti-pattern (toolchain-first). Pure.
  */
 export function detectConventions(dir: string, pkg: PackageJson | null): string[] {
@@ -39,7 +39,7 @@ export function detectConventions(dir: string, pkg: PackageJson | null): string[
   if (/\[tool\.ruff\]/.test(py)) tools.push('ruff');
   if (/\[tool\.mypy\]/.test(py)) tools.push('mypy');
   if (has('rustfmt.toml') || has('.rustfmt.toml')) tools.push('rustfmt');
-  if (tools.length) conv.push(`Style: ${tools.join(' · ')} configs`);
+  if (tools.length) conv.push(`Style enforced by ${tools.join(' · ')} — obey the configs`);
 
   return conv;
 }

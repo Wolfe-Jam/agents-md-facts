@@ -104,6 +104,14 @@ describe('R4/R5 — the hook and the Action run this release', () => {
 
 describe('R6 — only real checks are gates', () => {
   const scripts = { 'test:watch': 'vitest', test: 'vitest run', 'test:e2e': 'playwright test', lint: 'eslint .', 'lint:fix': 'eslint . --fix' };
+  test('watch and fix scripts are not listed', () => {
+    expect(detectCommands(repo({}), JSON.parse(pkg({ scripts })))).toEqual({ test: 'npm test', 'test:e2e': 'npm run test:e2e', lint: 'npm run lint' });
+  });
+  test('the guardrail names `test`; the Definition of Done names only test and lint', () => {
+    const md = author(repo({ 'package.json': pkg({ scripts }) }));
+    expect(md).toContain('run the tests (`npm test`)');
+    expect(md).toContain('Done when: `npm run lint` exits 0 · `npm test` passes · committed with a clear message.');
+  });
 });
 
 describe('R7/R8/R9 — CI read as YAML', () => {
@@ -212,6 +220,16 @@ describe('R16 — headings inside code blocks are not sections', () => {
 
 
 /* ── The second review of #7 (goose): G-numbers are its finding numbers ── */
+
+describe('R19 — the default branch is not assumed', () => {
+  test('git rules name "the default branch", never `main`', () => {
+    const md = author(ROOT);
+    expect(md).toContain('push to the default branch');
+    expect(md).toContain('Branch off the default branch; never commit to it directly');
+    expect(md).not.toContain('`main`');
+  });
+});
+
 
 describe('G3 — release and chore workflows are named, not copied', () => {
   test('a publish workflow\'s steps stay out; its file is named', () => {
@@ -326,7 +344,7 @@ describe('G17 — contributing headings as plain text', () => {
       'package.json': pkg({}),
       'CONTRIBUTING.md': '## Why C#\n## Use [Langfuse](https://x.y)\n## A ##\n## B\n## C\n## D\n## E\n',
     }));
-    expect(md).toContain('- `CONTRIBUTING.md` — Why C# · Use Langfuse · A · B · C · D · …');
+    expect(md).toContain('- Follow `CONTRIBUTING.md` (Why C# · Use Langfuse · A · B · C · D · …).');
   });
 });
 

@@ -33,12 +33,17 @@ describe('authorAgentsMd', () => {
     expect(md).toContain('## Run the tests');
     expect(md).toContain('## Where things live');
     expect(md).toContain('## Conventions');
-    expect(md).toContain('## Secrets');
+    expect(md).toContain('## Guardrails');
+    expect(md).toContain('## Definition of Done');
+    expect(md).toContain('## Security & secrets');
+    expect(md).toContain('## Commit & PR');
   });
 
-  test('facts only: no guardrails, definition of done or commit rules', () => {
+  test('all three guardrail tiers are present', () => {
     const md = authorAgentsMd(fullContext());
-    for (const h of ['## Guardrails', '## Definition of Done', '## Commit & PR', 'Always OK', 'Never']) expect(md).not.toContain(h);
+    expect(md).toContain('**Always OK:**');
+    expect(md).toContain('**Ask first:**');
+    expect(md).toContain('**Never:**');
   });
 
   test('install command follows the detected package manager', () => {
@@ -53,7 +58,8 @@ describe('authorAgentsMd', () => {
 
   test('secrets section names location and example, never values', () => {
     const md = authorAgentsMd(fullContext());
-    expect(md).toContain('## Secrets\n\n- `.env` (example: `.env.example`)');
+    expect(md).toContain('Secrets live in `.env` (see `.env.example`)');
+    expect(md).toContain('Never read or commit them.');
   });
 
   test('the banner does not contain "generate"', () => {
@@ -82,9 +88,10 @@ describe('authorAgentsMd', () => {
     expect(md).not.toContain('## Run the tests');
     expect(md).not.toContain('## Where things live');
     expect(md).not.toContain('## Conventions');
-    expect(md).not.toContain('## Secrets');
-    expect(md).not.toContain('## Contributing');
-    // Nothing detected → only the header and orientation.
-    expect(md).not.toMatch(/^## /m);
+    expect(md).not.toContain('## Security & secrets');
+    expect(md).not.toContain('## Commit & PR');
+    // Guardrails + Definition of Done are always present.
+    expect(md).toContain('## Guardrails');
+    expect(md).toContain('## Definition of Done');
   });
 });

@@ -5,16 +5,16 @@ to [Semantic Versioning](https://semver.org/).
 
 ## Unreleased
 
-**The block is facts, not instructions.** Every line is read from a file the repo declares: its scripts, manifest, workflows, folders and guides. What a command does is never judged, so a line is either a fact or it isn't there. Guardrails, Definition of Done and the commit rules are no longer written: instructions belong to the hand-written part of AGENTS.md, outside the markers. (They may come back in a later version.)
+Everything 0.1.0 authored is still authored (setup & build, tests, where things live with its key files, conventions, guardrails, definition of done, security & secrets, commit & PR); 0.2.0 adds to it. Detection reads what the repo declares (its scripts, manifests, workflows, folders and guides) and never judges what a command does.
 
 New sections and facts:
 
 - **Description:** package.json `description` under the title. **Node version:** `engines.node` on the orientation line.
 - **Before a release:** what `npm publish` runs first (`prepublishOnly`, then `prepack`), or the `release` script, verbatim.
 - **CI:** the GitHub Actions workflows that run on pull requests and pushes, each job's `if:`, runners and matrix, and the lines in it that call the repo's own scripts or listed commands (`npm test`, `pnpm run lint`, `cargo test`), with each step's `if:` and directory. Everything else a workflow runs stays in the file. A shared workflow is shown under the job that calls it. Tag-only pushes, pushes to main only, schedules, manual runs, `pull_request_target` bots and PRs that only run on close or label are named, not copied. Read as YAML (merge keys expanded); this adds the first runtime dependency, `yaml`.
-- **Where things live:** the top-level folders git tracks (outside git, the folders minus what the root `.gitignore` ignores), each with what the repo says it is (a wrangler `main`, a workspace that lists it, or a curated gloss for `cmd/`, `e2e/`, `fixtures/`, …), monorepo config files, and the entry points exactly as `bin`, `exports` or `main` declare them (a declared path git doesn't track says so, with the build script). With no manifest entry, Cargo's `src/main.rs` / `src/lib.rs` (unless Cargo.toml moves or turns them off, or it's a virtual workspace) and a root `main.go` that is `package main` are listed, named as defaults.
-- **Secrets:** the secrets file and its example, by name.
-- **Contributing:** the guide (`CONTRIBUTING.md`, `.github/` or `docs/`) and its headings; the rules stay in the guide.
+- **Where things live:** the top-level folders git tracks (outside git, the folders minus what the root `.gitignore` ignores), each with what the repo says it is (a wrangler `main`, a workspace that lists it, or a curated gloss for `cmd/`, `e2e/`, `fixtures/`, …), monorepo config files, and the entry points exactly as `bin`, `exports` or `main` declare them (a declared path git doesn't track says so, with the build script), then 0.1.0's key files (manifests, entry files, docs, config) that exist and aren't already shown. With no manifest entry, Cargo's `src/main.rs` / `src/lib.rs` (unless Cargo.toml moves or turns them off, or it's a virtual workspace) and a root `main.go` that is `package main` are listed, named as defaults.
+- **Contributing:** Commit & PR points to the guide (`CONTRIBUTING.md`, `.github/` or `docs/`) and lists its headings; the rules stay in the guide.
+- **Guardrails and Commit & PR say "the default branch",** not `main`. The Definition of Done names the gate scripts (`test`, `lint`, typecheck), not `test:*` variants.
 
 How facts are read:
 

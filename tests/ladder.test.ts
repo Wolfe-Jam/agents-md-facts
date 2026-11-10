@@ -104,12 +104,13 @@ jobs:
 describe('A3 — the contributing guide', () => {
   test('pointed to, with its headings, not copied', () => {
     const md = author(repo({ 'package.json': pkg({}), 'CONTRIBUTING.md': '# Contributing\n\n## A wrong verdict\n\nOpen an issue.\n\n## Code\n\n- A new check needs a test.\n' }));
-    expect(md).toContain('## Contributing\n\n- `CONTRIBUTING.md` — A wrong verdict · Code');
+    expect(md).toContain('- Follow `CONTRIBUTING.md` (A wrong verdict · Code).');
     expect(md).not.toContain('A new check needs a test');
   });
   test('found in .github/ too, and shown outside a git repo', () => {
     const md = author(repo({ '.github/CONTRIBUTING.md': '# How to help\n' }));
-    expect(md).toContain('## Contributing\n\n- `.github/CONTRIBUTING.md`');
+    expect(md).toContain('## Commit & PR');
+    expect(md).toContain('- Follow `.github/CONTRIBUTING.md`.');
   });
 });
 
@@ -183,9 +184,10 @@ describe('A8 — the Node version', () => {
 });
 
 describe('A9 — renamed scripts', () => {
-  test('`compile` is the build: listed', () => {
+  test('`compile` is the build: listed, and counted for "build the project"', () => {
     const md = author(repo({ 'package.json': pkg({ scripts: { compile: 'tsc', test: 'node --test' } }) }));
     expect(md).toContain('npm run compile    # compile');
+    expect(md).toContain('build the project');
   });
   test('test:* and format:check are verify commands', () => {
     const dir = repo({ 'package.json': pkg({ scripts: { test: 'a', 'test:coverage': 'b', 'format:check': 'c', format: 'd' } }) });

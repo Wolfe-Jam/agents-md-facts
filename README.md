@@ -8,7 +8,7 @@
 [![DOI: Agents paper](https://img.shields.io/badge/DOI-Agents%20paper-FF6B35)](https://doi.org/10.5281/zenodo.21951641)
 [![Business card · Get yours →](https://wolfe-jam.github.io/agent-business-card/badge.svg)](https://wolfe-jam.github.io/agent-business-card/?repo=Wolfe-Jam/agents-md-facts)
 
-Hand-written agent files **rot**. LLM-written ones often **bloat** and can *reduce* task success ([Gloaguen et al., 2026](https://arxiv.org/abs/2602.11988)). This tool **authors** only what the tree declares — real build/test commands, entry points, toolchain conventions — and leaves the instructions to you. Nothing invented. Nothing padded.
+Hand-written agent files **rot**. LLM-written ones often **bloat** and can *reduce* task success ([Gloaguen et al., 2026](https://arxiv.org/abs/2602.11988)). This tool **authors** only what the tree declares — real build/test commands, entry points, toolchain conventions. Nothing invented. Nothing padded.
 
 ## Use
 
@@ -29,9 +29,9 @@ It reads your manifests and config files and, in a git repo, the list of files g
 
 ## What it authors
 
-Description and orientation (language, kind, Node version) · setup & build · tests · before a release (what `npm publish` runs first: `prepublishOnly`, `prepack`) · CI (the GitHub Actions workflows that check pull requests and pushes, with the repo's own commands each one runs; other workflows named) · where things live (folders and entry points, as the manifest declares them) · conventions · secrets files · your contributing guide and its headings.
+Description and orientation (language, kind, Node version) · setup & build · tests · before a release (what `npm publish` runs first: `prepublishOnly`, `prepack`) · CI (the GitHub Actions workflows that check pull requests and pushes, with the repo's own commands each one runs; other workflows named) · where things live (folders, entry points as the manifest declares them, and key files) · conventions · guardrails · definition of done · security (if secrets files exist) · commit & PR (with a pointer to your contributing guide).
 
-Each section appears only when the repo has something for it. The block is facts, not instructions: guardrails, what "done" means and commit rules are yours to write outside the markers.
+Guardrails and Definition of Done always appear; every other section only when the repo has something for it.
 
 Every line is a **detected fact** or a **curated default**. If it resolves no ambiguity, it is dropped.
 

@@ -257,7 +257,8 @@ export function ownCommands(repoDir: string, listed: string[]): Known {
   return (command, dir) => {
     const c = command.replace(/^(\w+=\S*\s+)+/, '');
     if (!dir && listed.some((l) => c === l || c.startsWith(`${l} `))) return true;
-    const m = /^(npm|pnpm|yarn|bun)\s+(?:(run|run-script)\s+)?([^\s-]\S*)/.exec(c);
+    // Boolean flags before the script name (`yarn --silent test`, `pnpm -s lint`) are skipped.
+    const m = /^(npm|pnpm|yarn|bun)(?:\s+-[\w-]+)*\s+(?:(run|run-script)(?:\s+-[\w-]+)*\s+)?([^\s-]\S*)/.exec(c);
     if (!m) return false;
     const [, pm, run, name = ''] = m;
     if (!run && (pm === 'bun' || (pm === 'npm' ? !/^(test|t|start)$/.test(name) : BUILTIN.has(name)))) return false;

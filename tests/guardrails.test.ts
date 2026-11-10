@@ -22,22 +22,37 @@ function base(overrides: Partial<RepoContext> = {}): RepoContext {
   };
 }
 
-describe('the Block is facts only', () => {
-  test('git present → no commit or branch rules (instructions live outside the Block)', () => {
+describe('detection-driven guardrails', () => {
+  test('git present → "push to the default branch" guardrail + Commit & PR section', () => {
     const md = authorAgentsMd(base({ isGitRepo: true }));
+    expect(md).toContain('push to the default branch');
+    expect(md).toContain('## Commit & PR');
+  });
+
+  test('git absent → no "push to the default branch", no Commit & PR', () => {
+    const md = authorAgentsMd(base({ isGitRepo: false }));
     expect(md).not.toContain('push to the default branch');
     expect(md).not.toContain('## Commit & PR');
-    expect(md).not.toContain('## Guardrails');
   });
 
-  test('.env present → a Secrets fact naming the file, no advice', () => {
+  test('.env present → "commit `.env`" guardrail + Security section', () => {
     const secrets: DetectedSecrets = { secrets: '.env' };
     const md = authorAgentsMd(base({ secrets }));
-    expect(md).toContain('## Secrets\n\n- `.env`');
-    expect(md.split('\n').slice(1).join('\n')).not.toMatch(/never|don't|do not/i);
+    expect(md).toContain('commit `.env`');
+    expect(md).toContain('## Security & secrets');
   });
 
-  test('.env absent → no Secrets section', () => {
-    expect(authorAgentsMd(base({ secrets: null }))).not.toContain('## Secrets');
+  test('.env absent → no "commit `.env`", no Security section', () => {
+    const md = authorAgentsMd(base({ secrets: null }));
+    expect(md).not.toContain('commit `.env`');
+    expect(md).not.toContain('## Security & secrets');
+  });
+
+  test('both absent → neither detection-driven line appears', () => {
+    const md = authorAgentsMd(base({ isGitRepo: false, secrets: null }));
+    expect(md).not.toContain('push to the default branch');
+    expect(md).not.toContain('commit `.env`');
+    // The static tiers still stand.
+    expect(md).toContain('**Never:** force-push, commit secrets.');
   });
 });

@@ -8,17 +8,17 @@ contributions that keep it small and focused are the most welcome.
 > **A line earns its place only if it resolves real ambiguity** (or caches
 > expensive exploration an agent would otherwise repeat).
 
-The block is a set of facts, not instructions: the repo's own commands,
-layout, conventions and pointers, each read from a file the repo declares.
-Instructions (guardrails, what "done" means, commit rules) belong to the
-hand-written part of AGENTS.md, outside the markers. It never guesses, pads,
-or restates rules a linter already enforces — the research is clear that
-padding an instruction file *hurts* agent task-success. When you add a
-detector or a section, ask: does this line tell an agent something it could
-not cheaply learn itself? If not, drop it.
+Everything this tool authors is a **detected fact** or a **curated default**.
+It never guesses, pads, or restates rules a linter already enforces — the
+research is clear that padding an instruction file *hurts* agent task-success.
+When you add a detector or a section, ask: does this line tell an agent
+something it could not cheaply learn itself? If not, drop it.
 
-Three rules that follow from the filter:
+Rules that follow from the filter:
 
+- **Nothing a release offered is taken away.** A new version adds to what
+  the last one authored. Removing a section, a language or a capability is a
+  discussion first, never a side effect of a refactor.
 - **Declared, not judged.** A line is read straight from a declared field
   (a script name, a manifest entry, a workflow trigger). Deciding what a
   command does (is it an install, a publish, a build of that file?) is out:

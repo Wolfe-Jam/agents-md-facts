@@ -21,6 +21,20 @@ const ROLES: RegExp[] = [
 const NOT_A_CHECK = /:(watch|fix|ui|dev|update|debug|open|serve)([:-]|$)/;
 
 /**
+ * The checks the Definition of Done names: the plain `test`, `lint` and
+ * typecheck scripts. Other `test:*` scripts are listed to run, not required:
+ * the repo doesn't say they must pass.
+ */
+export function isGateScript(name: string): boolean {
+  return /^(test|lint|typecheck|type-check|check-types|check)$/.test(name);
+}
+
+/** True for a script name that plays the build role (`build`, `compile`, `bundle`). */
+export function isBuildScript(name: string): boolean {
+  return /^(build|compile|bundle)$/.test(name);
+}
+
+/**
  * How this repo runs a package.json script, in its own package manager's
  * spelling: `npm test` and `npm start` (npm's own shorthands), `npm run x`
  * otherwise; `bun run x` (bare `bun test` runs Bun's test runner, not the

@@ -9,6 +9,8 @@ import { tmpdir } from 'os';
 import { dirname, join } from 'path';
 import { authorAgentsMd } from '../src/author.ts';
 import { buildRepoContext } from '../src/context.ts';
+import { detectCommands } from '../src/detect/commands.ts';
+import { parseWorkflow } from '../src/detect/ci.ts';
 import { detectContributing } from '../src/detect/contributing.ts';
 import { gitFiles } from '../src/detect/git.ts';
 import { extractBlock, injectBlock, MarkerError, wrapBlock } from '../src/inject.ts';
@@ -195,5 +197,42 @@ describe('Rust and Go defaults (kept by decision; not removed without a discussi
   test('a manifest entry wins over the defaults', () => {
     const md = author(repo({ 'package.json': pkg({ main: 'dist/index.js' }), 'Cargo.toml': '[package]\nname = "x"\n', 'src/main.rs': '' }));
     expect(md).not.toContain('Cargo default');
+  });
+});
+
+describe('scripts and workflows by name and trigger', () => {
+  test('`test:update-snapshots` is not a check', () => {
+    expect(detectCommands('/nonexistent', { scripts: { 'test:update-snapshots': 'jest' } })).toEqual({});
+  });
+  test('push to main only, and label-only pull requests, are named, not copied', () => {
+    expect(parseWorkflow('on:\n  push:\n    branches: [main]\njobs: {}\n').checksChanges).toBe(false);
+    expect(parseWorkflow('on:\n  pull_request:\n    types: [labeled, unlabeled]\njobs: {}\n').checksChanges).toBe(false);
+    expect(parseWorkflow('on:\n  push:\n    branches: [main]\n  pull_request:\njobs: {}\n').checksChanges).toBe(true);
+    expect(parseWorkflow('on:\n  pull_request:\n    types: [opened, labeled]\njobs: {}\n').checksChanges).toBe(true);
+    expect(parseWorkflow('on: push\njobs: {}\n').checksChanges).toBe(true);
+  });
+  test('a CI line that calls a repo script after flags is the repo\'s own command', () => {
+    const md = author(repo({ 'package.json': pkg({ scripts: { test: 't', lint: 'l' } }), '.github/workflows/ci.yml': 'on: pull_request\njobs:\n  j:\n    runs-on: ubuntu-latest\n    steps:\n      - run: yarn --silent test\n      - run: pnpm -s lint\n' }));
+    expect(md).toContain('yarn --silent test\npnpm -s lint');
+  });
+});
+
+describe('0.2.0 keeps everything 0.1.0 offered', () => {
+  test('every v0.1.0 section and line type is still authored', () => {
+    const dir = repo({
+      'package.json': pkg({ type: 'module', scripts: { build: 'tsc', test: 'node --test', lint: 'eslint .' } }),
+      'tsconfig.json': '{"compilerOptions":{"strict":true}}', 'eslint.config.js': '', '.env': 'X=1', '.env.example': 'X=',
+      'src/index.ts': '', 'README.md': '', 'CHANGELOG.md': '',
+    }, true);
+    const md = author(dir);
+    for (const line of [
+      '## Setup & build', 'npm install    # install dependencies', '## Run the tests', '## Where things live',
+      'Key files:', '- `package.json`', '- `src/index.ts`', '- `README.md`', '- `tsconfig.json`',
+      '## Conventions', 'TypeScript strict mode (tsconfig.json)', 'ESM modules (`type: module`)', '— obey the configs',
+      '## Guardrails', '**Always OK:**', '**Ask first:**', '**Never:**', 'commit `.env`',
+      '## Definition of Done', 'committed with a clear message',
+      '## Security & secrets', 'Secrets live in `.env` (see `.env.example`). Never read or commit them.',
+      '## Commit & PR', 'refresh this file in the **same PR**',
+    ]) expect(md).toContain(line);
   });
 });

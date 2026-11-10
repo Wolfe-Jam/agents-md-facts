@@ -27,11 +27,19 @@ export function detectLanguage(dir: string): string {
   return 'Unknown';
 }
 
-/** Detect the runtime. Pure. */
+/**
+ * Detect the runtime the project runs on, as it declares it. A package.json
+ * repo is Node.js unless `engines` names Bun and not Node: `bunfig.toml` and a
+ * Bun lockfile configure the tooling (shown as the package manager), not where
+ * the published code runs. Pure.
+ */
 export function detectRuntime(dir: string): string {
-  if (existsSync(join(dir, 'bunfig.toml'))) return 'Bun';
+  const pkg = readPackageJson(dir);
+  const engines = pkg?.engines ?? {};
+  if (pkg && typeof engines.bun === 'string' && typeof engines.node !== 'string') return 'Bun';
   if (existsSync(join(dir, 'deno.json')) || existsSync(join(dir, 'deno.jsonc'))) return 'Deno';
-  if (readPackageJson(dir)) return 'Node.js';
+  if (pkg) return 'Node.js';
+  if (existsSync(join(dir, 'bunfig.toml'))) return 'Bun';
   if (existsSync(join(dir, 'Cargo.toml'))) return 'Rust';
   if (existsSync(join(dir, 'go.mod'))) return 'Go';
   if (existsSync(join(dir, 'pubspec.yaml'))) return 'Dart';

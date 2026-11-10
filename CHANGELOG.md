@@ -9,6 +9,7 @@ Everything 0.1.0 authored is still authored (setup & build, tests, where things 
 
 New sections and facts:
 
+- **Runtime as declared:** a package.json repo is Node.js unless `engines` names Bun and not Node. A `bunfig.toml` alone no longer makes a Node package "Bun" (Bun stays the package manager when it's the lockfile).
 - **Description:** package.json `description` under the title. **Node version:** `engines.node` on the orientation line.
 - **Before a release:** what `npm publish` runs first (`prepublishOnly`, then `prepack`), or the `release` script, verbatim.
 - **CI:** the GitHub Actions workflows that run on pull requests and pushes, each job's `if:`, runners and matrix, and each step that runs one of the repo's own scripts or listed commands (`npm test`, `pnpm run lint`, `cargo test`), shown whole, so a check in the same step (`… && git diff --exit-code`) stays visible. A step's `if:`, directory and non-bash shell end its own line; a multi-line script sits indented under a header with its step name. Other steps are counted ("# 2 other steps in the file"), never copied. The main check comes first (`ci.yml`, `test.yml`, …); helpers that fix, format, label or check the changelog come last. A shared workflow is shown under the job that calls it. Tag-only pushes, pushes to main only, schedules, manual runs, `pull_request_target` bots and PRs that only run on close or label are named, not copied. Read as YAML (merge keys expanded); this adds the first runtime dependency, `yaml`.
@@ -29,6 +30,7 @@ Integrations:
 
 - **The pre-commit hook works:** it runs `npx agents-md-facts@<this version> --check` (it failed to install before, because `dist/` isn't in git). It needs Node and network, and pre-commit 3.2.0 or later.
 - **The Action defaults to its own version,** not `latest`.
+- **CI runs on Windows too,** so CRLF checkouts and paths are tested for real.
 
 **Upgrading from 0.1.0:** run `npx agents-md-facts` once. The output changed, so `--check` reports the old file as stale until you refresh it.
 

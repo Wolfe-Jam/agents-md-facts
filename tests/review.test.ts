@@ -47,8 +47,8 @@ jobs:
       - run: npx wrangler deploy
 `);
     expect(jobs).toEqual([
-      { id: 'test', runsOn: ['ubuntu-latest'], matrix: [], steps: [{ commands: ['npm test'] }], other: 0 },
-      { id: 'deploy', if: "github.ref == 'refs/heads/main'", runsOn: ['ubuntu-latest'], matrix: [], steps: [{ commands: ['npx wrangler deploy'] }], other: 0 },
+      { id: 'test', runsOn: ['ubuntu-latest'], matrix: [], steps: [{ lines: ['npm test'] }], other: 0 },
+      { id: 'deploy', if: "github.ref == 'refs/heads/main'", runsOn: ['ubuntu-latest'], matrix: [], steps: [{ lines: ['npx wrangler deploy'] }], other: 0 },
     ]);
   });
 });
@@ -143,15 +143,15 @@ jobs:
     expect(on).toEqual(['push', 'pull_request']);
     expect(jobs[0]?.runsOn).toEqual(['ubuntu-latest']);
     expect(jobs[0]?.steps).toEqual([
-      { commands: ['npm test'] },
-      { commands: ['npm run build --if-present'] },
-      { commands: ['npm run smoke'], if: "github.event_name == 'push'" },
-      { commands: ["pnpm i --filter '!docs'"] },
+      { lines: ['npm test'] },
+      { lines: ['npm run build --if-present'] },
+      { lines: ['npm run smoke'], if: "github.event_name == 'push'" },
+      { lines: ["pnpm i --filter '!docs'"] },
     ]);
   });
   test('runners and matrix belong to their job; a label set is one runner', () => {
     expect(jobs[0]?.matrix).toEqual(['node-version 18, 20']);
-    expect(jobs[1]).toEqual({ id: 'lint', runsOn: ['self-hosted+linux+x64'], matrix: [], steps: [{ commands: ['npm run lint'] }], other: 0 });
+    expect(jobs[1]).toEqual({ id: 'lint', runsOn: ['self-hosted+linux+x64'], matrix: [], steps: [{ lines: ['npm run lint'] }], other: 0 });
   });
   test('broken YAML adds nothing', () => {
     expect(parseWorkflow('jobs: [unclosed')).toEqual({ on: [], checksChanges: false, jobs: [], unreadable: true });
@@ -360,6 +360,6 @@ describe('G18/G19 — odd manifests', () => {
 describe('G15 — a step\'s directory and shell are shown', () => {
   test('working-directory and shell from the step or the job default', () => {
     const { jobs } = parseWorkflow('on: push\njobs:\n  j:\n    runs-on: windows-latest\n    defaults:\n      run:\n        shell: pwsh\n    steps:\n      - run: npm run lint\n        working-directory: ./sibling/\n');
-    expect(jobs[0]?.steps).toEqual([{ commands: ['npm run lint'], dir: 'sibling', shell: 'pwsh' }]);
+    expect(jobs[0]?.steps).toEqual([{ lines: ['npm run lint'], dir: 'sibling', shell: 'pwsh' }]);
   });
 });

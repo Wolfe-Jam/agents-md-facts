@@ -77,23 +77,23 @@ jobs:
         runsOn: ['ubuntu-latest', 'windows-latest'],
         matrix: ['node 22, 24'],
         steps: [
-          { commands: ['npm ci'] },
-          { commands: ['npm test'] },
-          { commands: ['npm run coverage:checks'], if: "matrix.os == 'ubuntu-latest'" },
-          { commands: ['npm run build:validator', 'git diff --exit-code -- worker/validator.cjs'], name: 'Drift' },
+          { lines: ['npm ci'] },
+          { lines: ['npm test'] },
+          { lines: ['npm run coverage:checks'], if: "matrix.os == 'ubuntu-latest'" },
+          { lines: ['npm run build:validator', 'git diff --exit-code -- worker/validator.cjs'], name: 'Drift' },
         ],
         other: 0,
       }],
     });
   });
-  test('the CI section names the workflow file and the repo commands it runs, nothing else', () => {
+  test('the CI section names the workflow file and each step that runs a repo command, whole', () => {
     const scripts = { test: 'node --test', 'coverage:checks': 'c8', 'build:validator': 'node b.mjs' };
     const md = author(repo({ 'package.json': pkg({ scripts }), '.github/workflows/ci.yml': WF }));
     expect(md).toContain('`.github/workflows/ci.yml` (on push)');
     expect(md).toContain('# job verify · ubuntu-latest, windows-latest · node 22, 24\nnpm test\n');
-    expect(md).toContain("# if: matrix.os == 'ubuntu-latest'\nnpm run coverage:checks\n# step \"Drift\"\nnpm run build:validator\n# 1 other step in the file");
+    // A note sits on its step's own line, or heads an indented script: it can't spread to the next step.
+    expect(md).toContain("npm run coverage:checks    # if: matrix.os == 'ubuntu-latest'\n# step \"Drift\"\n  npm run build:validator\n  git diff --exit-code -- worker/validator.cjs\n# 1 other step in the file");
     expect(md).not.toContain('npm ci');
-    expect(md).not.toContain('git diff');
   });
   test('a workflow that only uses actions is named, not copied', () => {
     const md = author(repo({ 'package.json': pkg({}), '.github/workflows/pages.yml': 'jobs:\n  a:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/deploy-pages@v4\n' }));

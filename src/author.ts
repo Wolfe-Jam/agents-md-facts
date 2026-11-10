@@ -49,8 +49,11 @@ function jobLines(job: CiJob, prefix: string): string[] {
   for (const step of job.steps) {
     const notes = [...step.name ? [`step "${step.name}"`] : [], ...step.if ? [`if: ${step.if}`] : [],
       ...step.dir ? [`in ${step.dir}/`] : [], ...step.shell ? [`shell: ${step.shell}`] : []];
-    if (notes.length) out.push(`# ${notes.join(' · ')}`);
-    out.push(...step.commands);
+    // A note belongs to one step: at the end of a one-line step, or as a header over an indented script.
+    const [first, ...more] = step.lines;
+    if (!notes.length) out.push(...step.lines);
+    else if (!more.length) out.push(`${first ?? ''}    # ${notes.join(' · ')}`);
+    else out.push(`# ${notes.join(' · ')}`, ...step.lines.map((l) => `  ${l}`));
   }
   if (job.other) out.push(`# ${job.other} other step${job.other > 1 ? 's' : ''} in the file`);
   return out;

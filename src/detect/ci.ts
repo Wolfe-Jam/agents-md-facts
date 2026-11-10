@@ -2,10 +2,10 @@ import { existsSync, readdirSync, readFileSync } from 'fs';
 import { join } from 'path';
 import { parse } from 'yaml';
 
-/** One CI step, reduced to the commands in it that call the repo's own scripts or listed commands. */
+/** One CI step that runs at least one of the repo's own scripts or listed commands. */
 export interface CiStep {
-  /** Those commands, each as written (on one line, token-shaped strings masked). */
-  commands: string[];
+  /** The whole step as written, line by line (blank lines dropped, token-shaped strings masked). */
+  lines: string[];
   /** The step's own `if:` condition, on one line. */
   if?: string;
   /** Where it runs, when not the repo root: step, then job, then workflow `defaults.run`. */
@@ -166,9 +166,9 @@ function readJob(id: string, job: Obj, wfDefaults: Obj, known: Known): CiJob {
     const raw = scalar(step.run);
     if (!raw) continue;
     const dir = oneLine(cleanDir(scalar(step['working-directory']) ?? scalar(jobDefaults['working-directory']) ?? scalar(wfDefaults['working-directory'])));
-    const commands = commandsOf(raw).map((c) => oneLine(c) ?? '').filter((c) => c && known(c, dir ?? undefined));
-    if (!commands.length) { other++; continue; }
-    const out: CiStep = { commands };
+    // Shown when it runs a repo command, and then shown whole: part of a step can be the check.
+    if (!commandsOf(raw).some((c) => known(oneLine(c) ?? '', dir ?? undefined))) { other++; continue; }
+    const out: CiStep = { lines: raw.split('\n').map((l) => l.trimEnd().replace(TOKEN, '<token>')).filter((l) => l.trim()) };
     const cond = oneLine(scalar(step.if));
     if (cond) out.if = cond;
     if (dir) out.dir = dir;

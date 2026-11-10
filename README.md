@@ -59,7 +59,7 @@ The tag pins the tool: `@v0.1.0` runs agents-md-facts 0.1.0. Or: `npx agents-md-
 
 ## Pre-commit hook
 
-Catch stale `AGENTS.md` before it lands:
+Catch stale `AGENTS.md` before it lands. The hook ships with v0.2.0, which isn't tagged yet; until then, use the Action above or `npx agents-md-facts --check`.
 
 ```yaml
 # .pre-commit-config.yaml

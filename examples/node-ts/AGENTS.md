@@ -1,5 +1,5 @@
 <!-- agents:from-facts:start -->
-<!-- authored by agents-md-facts — from your repo's facts, never guessed · re-run to refresh · keep the start/end markers · authored: 2026-11-10T05:31:06.507Z -->
+<!-- authored by agents-md-facts — from your repo's facts, never guessed · re-run to refresh · keep the start/end markers · authored: 2026-11-10T14:16:28.328Z -->
 
 # AGENTS.md — node-ts-example
 
@@ -23,6 +23,14 @@ npm run dev    # dev
 npm test
 npm run lint
 ```
+
+## Before a release
+
+`npm publish` runs no checks first: package.json has no `prepublishOnly`, `prepack` or `release` script.
+
+## CI
+
+No GitHub Actions workflows (`.github/workflows/`).
 
 ## Where things live
 

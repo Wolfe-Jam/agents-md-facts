@@ -41,8 +41,10 @@ describe('A1 — the release gate', () => {
     expect(md).toContain('The `release` script runs:');
     expect(md).toContain('changeset publish');
   });
-  test('no release script → no section', () => {
-    expect(author(repo({ 'package.json': pkg({ scripts: { test: 'node --test' } }) }))).not.toContain('## Before a release');
+  test('no release script → the section says nothing runs first; a private package says nothing', () => {
+    expect(author(repo({ 'package.json': pkg({ scripts: { test: 'node --test' } }) })))
+      .toContain('## Before a release\n\n`npm publish` runs no checks first: package.json has no `prepublishOnly`, `prepack` or `release` script.');
+    expect(author(repo({ 'package.json': pkg({ private: true, scripts: { test: 'node --test' } }) }))).not.toContain('## Before a release');
   });
 });
 

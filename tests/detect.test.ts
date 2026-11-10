@@ -30,8 +30,10 @@ describe('commands', () => {
     });
   });
 
-  test('python → pytest', () => {
-    expect(detectCommands(python, null)).toEqual({ test: 'pytest' });
+  test('python → pytest, plus the checkers pyproject configures', () => {
+    expect(detectCommands(python, null)).toEqual({
+      test: 'pytest', lint: 'ruff check .', typecheck: 'mypy .', 'format:check': 'black --check .',
+    });
   });
 
   test('rust → cargo defaults', () => {

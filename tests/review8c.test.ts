@@ -282,3 +282,32 @@ describe('runtime as the repo declares it', () => {
     expect(author(repo({ 'bunfig.toml': '' }))).toMatch(/^Bun$/m);
   });
 });
+
+describe('0.2.0 additions: absent facts, Python, CI toolchain steps', () => {
+  test('#16 a git repo with no workflows says so; a non-git folder says nothing', () => {
+    expect(author(repo({ 'package.json': pkg({ scripts: { test: 't' } }) }, true))).toContain('## CI\n\nNo GitHub Actions workflows (`.github/workflows/`).');
+    expect(author(repo({ 'package.json': pkg({ scripts: { test: 't' } }) }))).not.toContain('## CI');
+  });
+  test('#1 pyproject [project.scripts] and [tool.poetry.scripts] are entry points, as declared', () => {
+    const md = author(repo({ 'pyproject.toml': '[project]\nname = "t"\n\n[project.scripts]\nt = "t.cli:main"\n\n[tool.poetry.scripts]\n"t-admin" = \'t.admin:run\'\n' }));
+    expect(md).toContain('- `t.cli:main` — the `t` command (`[project.scripts]`)\n- `t.admin:run` — the `t-admin` command (`[tool.poetry.scripts]`)');
+  });
+  test('#2 uv and Poetry run the configured checkers and install; plain pyproject runs them bare', () => {
+    const uv = author(repo({ 'pyproject.toml': '[tool.ruff]\nline-length = 100\n[tool.mypy]\nstrict = true\n', 'uv.lock': '' }));
+    expect(uv).toContain('uv sync    # install dependencies');
+    expect(uv).toContain('uv run pytest\nuv run ruff check .\nuv run mypy .');
+    expect(author(repo({ 'pyproject.toml': '[tool.black]\n', 'poetry.lock': '' }))).toContain('poetry install    # install dependencies');
+    expect(author(repo({ 'pyproject.toml': '[project]\nname = "t"\n', 'ruff.toml': '' }))).toContain('pytest\nruff check .');
+  });
+  test('#8 CI shows workspace script calls and the declared toolchain\'s own commands', () => {
+    const steps = ['bun test', 'pnpm --filter web test', 'pnpm -r lint', 'yarn workspace web test', 'npx tsc --noEmit', 'cargo clippy -- -D warnings', 'make check', 'npx wrangler deploy', 'make deploy-ish'];
+    const md = author(repo({
+      'package.json': pkg({ scripts: { test: 't' } }), 'bun.lock': '', 'Cargo.toml': '[package]\nname = "x"\n', 'Makefile': 'check:\n\techo ok\n',
+      '.github/workflows/ci.yml': `on: pull_request\njobs:\n  j:\n    runs-on: ubuntu-latest\n    steps:\n${steps.map((s) => `      - run: ${s}\n`).join('')}`,
+    }));
+    for (const shown of steps.slice(0, 7)) expect(md).toContain(`\n${shown}\n`);
+    expect(md).not.toContain('wrangler');
+    expect(md).not.toContain('deploy-ish');
+    expect(md).toContain('# 2 other steps in the file');
+  });
+});

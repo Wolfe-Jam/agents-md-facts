@@ -1,5 +1,5 @@
 <!-- agents:from-facts:start -->
-<!-- authored by agents-md-facts — from your repo's facts, never guessed · re-run to refresh · keep the start/end markers · authored: 2026-11-10T13:42:38.399Z -->
+<!-- authored by agents-md-facts — from your repo's facts, never guessed · re-run to refresh · keep the start/end markers · authored: 2026-11-10T14:16:29.123Z -->
 
 # AGENTS.md — agents-md-facts
 
@@ -41,8 +41,10 @@ The repo's own commands each check runs on a change; everything else is in the w
 
 ```bash
 # job test · ubuntu-latest, windows-latest
+bunx tsc --noEmit
 bun run lint
-# 4 other steps in the file
+bun test
+# 2 other steps in the file
 ```
 
 ## Where things live

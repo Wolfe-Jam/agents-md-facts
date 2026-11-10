@@ -1,5 +1,5 @@
 <!-- agents:from-facts:start -->
-<!-- authored by agents-md-facts — from your repo's facts, never guessed · re-run to refresh · keep the start/end markers · authored: 2026-11-10T04:42:04.614Z -->
+<!-- authored by agents-md-facts — from your repo's facts, never guessed · re-run to refresh · keep the start/end markers · authored: 2026-11-10T04:57:52.925Z -->
 
 # AGENTS.md — rust
 
@@ -23,6 +23,10 @@ cargo clippy
 ## Where things live
 
 - `src/`
+
+Entry points:
+
+- `src/main.rs` — binary crate root (Cargo default)
 
 ## Conventions
 

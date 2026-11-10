@@ -177,3 +177,23 @@ describe('N9 — workspace roots', () => {
     expect(md).not.toContain('`tools/` — workspace packages');
   });
 });
+
+describe('Rust and Go defaults (kept by decision; not removed without a discussion)', () => {
+  test('Cargo: main.rs and lib.rs by default; `[lib] path` (after an array) and a virtual workspace turn them off', () => {
+    expect(author(repo({ 'Cargo.toml': '[package]\nname = "x"\n', 'src/main.rs': '', 'src/lib.rs': '' })))
+      .toContain('- `src/main.rs` — binary crate root (Cargo default)\n- `src/lib.rs` — library crate root (Cargo default)');
+    expect(author(repo({ 'Cargo.toml': '[package]\nname = "x"\n\n[lib]\ncrate-type = ["cdylib"]\npath = "src/mylib.rs"\n', 'src/lib.rs': '', 'src/mylib.rs': '' })))
+      .not.toContain('library crate root');
+    expect(author(repo({ 'Cargo.toml': '[workspace]\nmembers = ["a"]\n', 'src/main.rs': '' }))).not.toContain('crate root');
+    expect(author(repo({ 'Cargo.toml': '[package]\nname = "x"\nautobins = false\n', 'src/main.rs': '' }))).not.toContain('binary crate root');
+  });
+  test('Go: a root main.go that is `package main`; not a `//go:build ignore` generator or another package', () => {
+    expect(author(repo({ 'go.mod': 'module x\n', 'main.go': 'package main\n' }))).toContain('- `main.go` — Go `package main`');
+    expect(author(repo({ 'go.mod': 'module x\n', 'main.go': '//go:build ignore\n\npackage main\n' }))).not.toContain('Go `package main`');
+    expect(author(repo({ 'go.mod': 'module x\n', 'main.go': 'package mainutil\n' }))).not.toContain('Go `package main`');
+  });
+  test('a manifest entry wins over the defaults', () => {
+    const md = author(repo({ 'package.json': pkg({ main: 'dist/index.js' }), 'Cargo.toml': '[package]\nname = "x"\n', 'src/main.rs': '' }));
+    expect(md).not.toContain('Cargo default');
+  });
+});

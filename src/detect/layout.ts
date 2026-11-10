@@ -137,10 +137,37 @@ function exportsEntry(exp: unknown, depth = 0): string | null {
 }
 
 /**
+ * Entry points Cargo and Go define by documented default when the manifest
+ * names none (curated defaults, named as such): Cargo's `src/main.rs` /
+ * `src/lib.rs` unless Cargo.toml turns them off or moves them, and a root
+ * `main.go` that is `package main`. Kept by decision (2026-11-10): Rust and Go
+ * support isn't removed without a discussion.
+ */
+function toolchainEntries(dir: string, has: (p: string) => boolean): LayoutEntry[] {
+  const out: LayoutEntry[] = [];
+  const cargo = read(join(dir, 'Cargo.toml'));
+  if (cargo !== null) {
+    // `path =` inside the `[lib]` table (it ends at the next line starting with `[`).
+    const lib = /^\[lib\][^\n]*\n((?:(?!\s*\[)[^\n]*\n?)*)/m.exec(cargo)?.[1] ?? '';
+    const libPath = /^\s*path\s*=/m.test(lib);
+    const virtual = /^\[workspace\]/m.test(cargo) && !/^\[package\]/m.test(cargo);
+    const noAutoBins = /\bautobins\s*=\s*false/.test(cargo);
+    if (!virtual && !noAutoBins && has('src/main.rs')) out.push({ path: 'src/main.rs', note: 'binary crate root (Cargo default)' });
+    if (!virtual && !libPath && has('src/lib.rs')) out.push({ path: 'src/lib.rs', note: 'library crate root (Cargo default)' });
+  }
+  const goMain = has('main.go') ? read(join(dir, 'main.go')) ?? '' : '';
+  // `//go:build ignore` marks a generator script run by `go run`, not the program.
+  if (existsSync(join(dir, 'go.mod')) && /^\s*package\s+main\b/m.test(goMain) && !/^\/\/go:build\s+ignore\b/m.test(goMain)) {
+    out.push({ path: 'main.go', note: 'Go `package main`' });
+  }
+  return out;
+}
+
+/**
  * The repo's map, from what it declares: each top-level folder with a note
  * (a wrangler `main` inside it, a workspace listing it, a name that needs
  * explaining), any monorepo config, then the entry points exactly as the
- * manifest names them (`bin`, `exports`, `main`). A declared path git doesn't
+ * manifest names them (`bin`, `exports`, `main`), else Cargo's and Go's defaults. A declared path git doesn't
  * track says so, with the build script's name; nothing is traced to a source
  * file, which would mean judging what the build does.
  */
@@ -183,5 +210,9 @@ export function detectLayout(dir: string, pkg: PackageJson | null, pm: string, t
   const exp = exportsEntry(pkg?.exports);
   if (exp) place(exp, 'package entry (`exports`)');
   else if (typeof pkg?.main === 'string' && pkg.main.trim()) place(pkg.main.trim(), 'package entry (`main`)');
+  if (!entries.length) {
+    const has = (p: string): boolean => (tracked ? tracked.files.has(p) : existsSync(join(dir, p)));
+    entries.push(...toolchainEntries(dir, has));
+  }
   return { folders, entries };
 }

@@ -164,9 +164,9 @@ describe('A6 — where things live', () => {
     expect(md).not.toContain('`dist/`');
     expect(md).not.toContain('node_modules');
   });
-  test('no manifest entry → no entry points (a toolchain convention isn\'t declared)', () => {
+  test('no manifest entry → the toolchain\'s own default, named as such', () => {
     const md = author(repo({ 'Cargo.toml': '[package]\nname = "x"\n', 'src/main.rs': '' }));
-    expect(md).not.toContain('Entry points');
+    expect(md).toContain('Entry points:\n\n- `src/main.rs` — binary crate root (Cargo default)');
   });
 });
 

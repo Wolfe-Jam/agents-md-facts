@@ -26,6 +26,9 @@ Three rules that follow from the filter:
 
 - **Facts, not opinions.** A section is emitted only when detection produces
   content for it. No "detected nothing, so here's a plausible default" filler.
+- **Rust and Go stay.** Cargo and Go support (their commands, and the
+  `src/main.rs` / `src/lib.rs` / `main.go` defaults) is not removed or cut
+  back without a discussion first, even when an edge case is hard.
 - **Point, don't restate.** For toolchain-governed conventions, point at the
   config (`tsconfig.json`, `.eslintrc`) instead of copying its rules into prose.
 

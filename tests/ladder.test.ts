@@ -80,8 +80,9 @@ jobs:
           { commands: ['npm ci'] },
           { commands: ['npm test'] },
           { commands: ['npm run coverage:checks'], if: "matrix.os == 'ubuntu-latest'" },
-          { commands: ['npm run build:validator', 'git diff --exit-code -- worker/validator.cjs'] },
+          { commands: ['npm run build:validator', 'git diff --exit-code -- worker/validator.cjs'], name: 'Drift' },
         ],
+        other: 0,
       }],
     });
   });
@@ -90,7 +91,7 @@ jobs:
     const md = author(repo({ 'package.json': pkg({ scripts }), '.github/workflows/ci.yml': WF }));
     expect(md).toContain('`.github/workflows/ci.yml` (on push)');
     expect(md).toContain('# job verify · ubuntu-latest, windows-latest · node 22, 24\nnpm test\n');
-    expect(md).toContain("# if: matrix.os == 'ubuntu-latest'\nnpm run coverage:checks\nnpm run build:validator");
+    expect(md).toContain("# if: matrix.os == 'ubuntu-latest'\nnpm run coverage:checks\n# step \"Drift\"\nnpm run build:validator\n# 1 other step in the file");
     expect(md).not.toContain('npm ci');
     expect(md).not.toContain('git diff');
   });
@@ -156,9 +157,9 @@ describe('A6 — where things live', () => {
     });
     const md = author(dir);
     expect(md).toContain('- `schema/`\n');
-    // Script bodies aren't read: no "used by" notes.
-    expect(md).toContain('- `scripts/`\n');
-    expect(md).toContain('- `test/`\n');
+    expect(md).toContain('- `scripts/` — used by `npm run smoke`');
+    expect(md).toContain('- `test/` — used by `npm test`');
+    // `-p worker` is a bare word, not a path: no "used by" claim from it.
     expect(md).toContain('- `worker/` — Cloudflare Worker (`wrangler.jsonc` main: `worker/index.ts`)\n');
     expect(md).toContain('- `dist/cli.js` — the `card-check` and `mcp-card-check` commands');
     expect(md).toContain('- `dist/lib.js` — package entry (`exports`)');

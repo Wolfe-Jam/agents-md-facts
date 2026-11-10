@@ -127,9 +127,9 @@ describe('C4 / G8-3 — which workflows the CI section shows', () => {
 });
 
 describe('C5 — workflow-level defaults.run', () => {
-  test('the directory comes from the workflow when the job and step set none; paths normalised', () => {
+  test('directory and shell come from the workflow when the job and step set none; paths normalised', () => {
     const { jobs } = parseWorkflow('on: push\ndefaults:\n  run:\n    working-directory: ./web/\n    shell: pwsh\njobs:\n  j:\n    runs-on: ubuntu-latest\n    steps:\n      - run: npm run lint\n');
-    expect(jobs[0]?.steps).toEqual([{ commands: ['npm run lint'], dir: 'web' }]);
+    expect(jobs[0]?.steps).toEqual([{ commands: ['npm run lint'], dir: 'web', shell: 'pwsh' }]);
   });
 });
 
@@ -163,13 +163,12 @@ describe('C9 — CommonMark fences and setext headings in CONTRIBUTING', () => {
 });
 
 describe('C11 / G8-5 — labels stay comments on one line', () => {
-  test('a multi-line if: becomes one comment line; a step name is never copied', () => {
+  test('a multi-line if: and name: become one comment line', () => {
     const md = author(repo({
       'package.json': pkg({ scripts: { a: 'x', b: 'y' } }),
       '.github/workflows/ci.yml': "on: push\njobs:\n  j:\n    runs-on: ubuntu-latest\n    steps:\n      - name: |\n          Harmless\n          rm -rf ~\n        if: |\n          github.event_name == 'push' ||\n          github.event_name == 'merge_group'\n        run: |\n          npm run a\n          npm run b\n",
     }));
-    expect(md).toContain("# if: github.event_name == 'push' || github.event_name == 'merge_group'\nnpm run a\nnpm run b");
-    expect(md).not.toContain('Harmless');
+    expect(md).toContain("# step \"Harmless rm -rf ~\" · if: github.event_name == 'push' || github.event_name == 'merge_group'\nnpm run a\nnpm run b");
     expect(md).not.toMatch(/^github\.event_name/m);
     expect(md).not.toMatch(/^rm -rf ~/m);
   });

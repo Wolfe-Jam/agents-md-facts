@@ -29,7 +29,7 @@ It reads your manifests and config files and, in a git repo, the list of files g
 
 ## What it authors
 
-Description and orientation (language, kind, Node version) · setup & build · tests · before a release (what `npm publish` runs first: `prepublishOnly`, `prepack`) · CI (the GitHub Actions workflows that check pull requests and pushes, with the repo's own commands each one runs; other workflows named) · where things live (folders, entry points as the manifest declares them, and key files) · conventions · guardrails · definition of done · security (if secrets files exist) · commit & PR (with a pointer to your contributing guide).
+Description and orientation (language, kind, Node version) · setup & build · tests · before a release (what `npm publish` runs first: `prepublishOnly`, `prepack`) · CI (the GitHub Actions workflows that check pull requests and pushes, main check first, with the repo's own commands each one runs and a count of the other steps; other workflows named) · where things live (folders and the scripts that use them, entry points as the manifest declares them, and key files) · conventions · guardrails · definition of done · security (if secrets files exist) · commit & PR (with a pointer to your contributing guide).
 
 Guardrails and Definition of Done always appear; every other section only when the repo has something for it.
 

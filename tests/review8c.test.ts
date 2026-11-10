@@ -236,3 +236,27 @@ describe('0.2.0 keeps everything 0.1.0 offered', () => {
     ]) expect(md).toContain(line);
   });
 });
+
+describe('restored from main: ranking, step details, folder notes', () => {
+  const run = (cmd: string): string => `on: pull_request\njobs:\n  j:\n    runs-on: ubuntu-latest\n    steps:\n      - run: ${cmd}\n`;
+  test('the main check comes first; fix / changelog helpers rank after the tests', () => {
+    const md = author(repo({
+      'package.json': pkg({ scripts: { test: 't', 'check-changelog': 'c', 'lint:js:fix': 'f', e2e: 'e' } }),
+      '.github/workflows/check-changelog.yml': run('yarn check-changelog'),
+      '.github/workflows/lint-autofix.yml': run('npm run lint:js:fix'),
+      '.github/workflows/nodejs.yml': run('npm test'),
+      '.github/workflows/tests-e2e.yml': run('npm run e2e'),
+      '.github/workflows/ci.yml': run('npm test'),
+    }));
+    const at = (f: string): number => md.indexOf(`\`.github/workflows/${f}\``);
+    expect(at('ci.yml')).toBeLessThan(at('tests-e2e.yml'));
+    expect(at('tests-e2e.yml')).toBeLessThan(at('nodejs.yml'));
+    expect(at('nodejs.yml')).toBeLessThan(at('check-changelog.yml'));
+    expect(at('nodejs.yml')).toBeLessThan(at('lint-autofix.yml'));
+  });
+  test('steps not shown are counted, never copied', () => {
+    const md = author(repo({ 'package.json': pkg({ scripts: { test: 't' } }), '.github/workflows/ci.yml': 'on: pull_request\njobs:\n  j:\n    runs-on: ubuntu-latest\n    steps:\n      - run: npm ci\n      - run: npm test\n      - run: npx wrangler deploy\n' }));
+    expect(md).toContain('npm test\n# 2 other steps in the file');
+    expect(md).not.toContain('wrangler');
+  });
+});

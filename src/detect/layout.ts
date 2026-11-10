@@ -42,6 +42,20 @@ const read = (path: string): string | null => {
   try { return readFileSync(path, 'utf-8'); } catch { return null; }
 };
 
+const escape = (s: string): string => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+/**
+ * True when a script uses `folder`: a command in it names the folder as a path
+ * (`folder/…`, `./folder`) or `cd`s into it. A bare word is not a path (`npm test`,
+ * `playwright test`, `NODE_ENV=test`), and a delete (`rm -rf`, `rimraf`) is not a use.
+ */
+function scriptUsesFolder(command: string, folder: string): boolean {
+  const f = escape(folder);
+  const path = new RegExp(`(?:^|[\\s"'(=,])(?:\\./${f}(?=[/\\s"')]|$)|${f}/)`);
+  const cd = new RegExp(`^\\s*cd\\s+(?:\\./)?${f}/?\\s*$`);
+  return command.split(/&&|\|\||;|\|/).some((seg) => !/^\s*(rm|rimraf|del|trash)\b/.test(seg) && (path.test(seg) || cd.test(seg)));
+}
+
 /** JSON with comments and trailing commas (tsconfig, wrangler.jsonc), or null. */
 function readJsonc(path: string): Record<string, unknown> | null {
   const text = read(path);
@@ -166,7 +180,7 @@ function toolchainEntries(dir: string, has: (p: string) => boolean): LayoutEntry
 /**
  * The repo's map, from what it declares: each top-level folder with a note
  * (a wrangler `main` inside it, a workspace listing it, a name that needs
- * explaining), any monorepo config, then the entry points exactly as the
+ * explaining, the scripts that use it), any monorepo config, then the entry points exactly as the
  * manifest names them (`bin`, `exports`, `main`), else Cargo's and Go's defaults. A declared path git doesn't
  * track says so, with the build script's name; nothing is traced to a source
  * file, which would mean judging what the build does.
@@ -175,11 +189,19 @@ export function detectLayout(dir: string, pkg: PackageJson | null, pm: string, t
   const worker = wranglerMain(dir);
   const workspaces = workspaceRoots(dir, pkg);
 
+  const scripts = Object.entries(pkg?.scripts ?? {}).filter((e): e is [string, string] => typeof e[1] === 'string');
+  const names = new Set(scripts.map(([k]) => k));
+  // `pre<x>` / `post<x>` run with `<x>`; listing both is noise.
+  const lifecycle = (k: string): boolean => /^(pre|post)/.test(k) && names.has(k.replace(/^(pre|post)/, ''));
+
   const folders = topFolders(dir, tracked).map((name): LayoutEntry => {
-    const note = worker && worker.main.startsWith(`${name}/`) ? `Cloudflare Worker (\`${worker.config}\` main: \`${worker.main}\`)`
-      : workspaces.has(name) ? 'workspace packages'
-        : NAMES[name] ?? null;
-    return { path: `${name}/`, note };
+    const notes: string[] = [];
+    if (worker && worker.main.startsWith(`${name}/`)) notes.push(`Cloudflare Worker (\`${worker.config}\` main: \`${worker.main}\`)`);
+    else if (workspaces.has(name)) notes.push('workspace packages');
+    else if (NAMES[name]) notes.push(NAMES[name]);
+    const users = scripts.filter(([k, v]) => !lifecycle(k) && scriptUsesFolder(v, name)).map(([k]) => `\`${scriptCommand(pm, k)}\``);
+    if (users.length) notes.push(`used by ${users.slice(0, 4).join(', ')}${users.length > 4 ? ', …' : ''}`);
+    return { path: `${name}/`, note: notes.length ? notes.join(', ') : null };
   });
   for (const [f, note] of WORKSPACE_FILES) if (existsSync(join(dir, f))) folders.push({ path: f, note });
 

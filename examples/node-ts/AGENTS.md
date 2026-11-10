@@ -1,5 +1,5 @@
 <!-- agents:from-facts:start -->
-<!-- authored by agents-md-facts — from your repo's facts, never guessed · re-run to refresh · keep the start/end markers · authored: 2026-11-10T05:19:09.930Z -->
+<!-- authored by agents-md-facts — from your repo's facts, never guessed · re-run to refresh · keep the start/end markers · authored: 2026-11-10T05:31:06.507Z -->
 
 # AGENTS.md — node-ts-example
 
@@ -26,7 +26,7 @@ npm run lint
 
 ## Where things live
 
-- `src/`
+- `src/` — used by `npm run dev`
 
 Key files:
 

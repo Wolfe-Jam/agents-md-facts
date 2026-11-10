@@ -10,6 +10,10 @@ export interface CiStep {
   if?: string;
   /** Where it runs, when not the repo root: step, then job, then workflow `defaults.run`. */
   dir?: string;
+  /** A multi-line script's own `name:` (a plain one, on one line). */
+  name?: string;
+  /** Its shell, when set and not bash / sh: step, then job, then workflow `defaults.run`. */
+  shell?: string;
 }
 
 /**
@@ -29,6 +33,8 @@ export interface CiJob {
   /** Matrix axes, e.g. `node 22, 24`; `include: N more` when it adds legs; a note when set by an expression. */
   matrix: string[];
   steps: CiStep[];
+  /** `run:` steps with none of the repo's own commands, left in the file. */
+  other: number;
   /** A local reusable workflow this job calls (`uses: ./.github/workflows/x.yml`), as a repo path. */
   calls?: string;
 }
@@ -154,17 +160,24 @@ function readJob(id: string, job: Obj, wfDefaults: Obj, known: Known): CiJob {
 
   const jobDefaults = isObj(job.defaults) && isObj(job.defaults.run) ? job.defaults.run : {};
   const steps: CiStep[] = [];
+  let other = 0;
   for (const step of Array.isArray(job.steps) ? job.steps : []) {
     if (!isObj(step)) continue;
     const raw = scalar(step.run);
     if (!raw) continue;
     const dir = oneLine(cleanDir(scalar(step['working-directory']) ?? scalar(jobDefaults['working-directory']) ?? scalar(wfDefaults['working-directory'])));
     const commands = commandsOf(raw).map((c) => oneLine(c) ?? '').filter((c) => c && known(c, dir ?? undefined));
-    if (!commands.length) continue;
+    if (!commands.length) { other++; continue; }
     const out: CiStep = { commands };
     const cond = oneLine(scalar(step.if));
     if (cond) out.if = cond;
     if (dir) out.dir = dir;
+    // bash / sh is what a reader assumes for a `run:` block; only another shell is worth a line.
+    const shell = oneLine(scalar(step.shell) ?? scalar(jobDefaults.shell) ?? scalar(wfDefaults.shell));
+    if (shell && !/^(bash|sh)\b/.test(shell)) out.shell = shell;
+    // A multi-line script is named by the repo's own step name, when it has a plain one.
+    const name = oneLine(scalar(step.name));
+    if (raw.includes('\n') && name && !hasExpr(name)) out.name = name;
     steps.push(out);
   }
 
@@ -177,6 +190,7 @@ function readJob(id: string, job: Obj, wfDefaults: Obj, known: Known): CiJob {
       ...notes,
     ],
     steps,
+    other,
   };
   const cond = oneLine(scalar(job.if));
   if (cond) out.if = cond;

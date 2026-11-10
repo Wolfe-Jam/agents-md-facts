@@ -1,11 +1,11 @@
 <!-- agents:from-facts:start -->
-<!-- authored by agents-md-facts — from your repo's facts, never guessed · re-run to refresh · keep the start/end markers · authored: 2026-11-10T14:16:29.123Z -->
+<!-- authored by agents-md-facts — from your repo's facts, never guessed · re-run to refresh · keep the start/end markers · authored: 2026-11-10T19:58:16.610Z -->
 
 # AGENTS.md — agents-md-facts
 
 Honest to a fault — a minimal AGENTS.md, authored from your repo's facts, never guessed.
 
-TypeScript · CLI · Node.js >=18 · bun package manager · v0.1.0
+TypeScript · CLI · Node.js >=18 · bun package manager · v0.2.0
 
 *Authored: 2026-11-10*
 

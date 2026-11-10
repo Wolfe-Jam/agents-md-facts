@@ -52,20 +52,20 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
-      - uses: Wolfe-Jam/agents-md-facts@v0.1.0
+      - uses: Wolfe-Jam/agents-md-facts@v0.2.0
 ```
 
-The tag pins the tool: `@v0.1.0` runs agents-md-facts 0.1.0. Or: `npx agents-md-facts --check`.
+The tag pins the tool: `@v0.2.0` runs agents-md-facts 0.2.0. Or: `npx agents-md-facts --check`.
 
 ## Pre-commit hook
 
-Catch stale `AGENTS.md` before it lands. The hook ships with v0.2.0, which isn't tagged yet; until then, use the Action above or `npx agents-md-facts --check`.
+Catch stale `AGENTS.md` before it lands. The hook runs `npx agents-md-facts@0.2.0 --check`, so it needs Node and network.
 
 ```yaml
 # .pre-commit-config.yaml
 repos:
   - repo: https://github.com/Wolfe-Jam/agents-md-facts
-    rev: v0.1.0
+    rev: v0.2.0
     hooks:
       - id: agents-md-facts
 ```

@@ -3,7 +3,7 @@ agent:
   name: agents-md-facts
   displayName: agents-md-facts
   id: urn:air:wolfe-jam.github.io:agent:agents-md-facts
-  version: 0.1.0
+  version: 0.2.0
   description: Authors an AGENTS.md from your repo's facts (build and test commands, entry points, toolchain conventions), never guessed.
   homepage: https://wolfe-jam.github.io
 capabilities:

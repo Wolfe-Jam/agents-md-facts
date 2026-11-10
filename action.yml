@@ -9,7 +9,7 @@ inputs:
   version:
     description: 'The npm version or dist-tag of agents-md-facts to run. Defaults to the version of this tag.'
     required: false
-    default: '0.1.0'
+    default: '0.2.0'
 
 runs:
   using: 'composite'

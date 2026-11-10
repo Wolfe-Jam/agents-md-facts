@@ -1,11 +1,11 @@
-import { existsSync } from 'fs';
-import { basename, join } from 'path';
+import { basename } from 'path';
 import { readPackageJson } from './detect/pkg.js';
 import { detectCommands, nodePackageManager } from './detect/commands.js';
 import { detectRelease, type DetectedRelease } from './detect/release.js';
-import { detectCi, type DetectedWorkflow } from './detect/ci.js';
+import { detectCi, ownCommands, type DetectedWorkflow } from './detect/ci.js';
 import { detectContributing, type DetectedContributing } from './detect/contributing.js';
 import { detectLayout, type DetectedLayout } from './detect/layout.js';
+import { gitFiles } from './detect/git.js';
 import { detectKeyFiles } from './detect/key-files.js';
 import { detectConventions } from './detect/conventions.js';
 import { detectSecrets, type DetectedSecrets } from './detect/secrets.js';
@@ -63,7 +63,10 @@ export interface RepoContext {
  */
 export function buildRepoContext(dir: string): RepoContext {
   const pkg = readPackageJson(dir);
+  // One read of git: whether this is a work tree, and what it tracks (throws when git refuses).
+  const tracked = gitFiles(dir);
 
+  const commands = detectCommands(dir, pkg);
   return {
     dir,
     name: pkg?.name ?? basename(dir),
@@ -75,12 +78,12 @@ export function buildRepoContext(dir: string): RepoContext {
     packageManager: detectPackageManager(dir),
     kind: detectKind(dir, pkg),
     hasNodeManifest: pkg != null,
-    isGitRepo: existsSync(join(dir, '.git')),
-    commands: detectCommands(dir, pkg),
+    isGitRepo: tracked !== null,
+    commands,
     keyFiles: detectKeyFiles(dir),
-    layout: detectLayout(dir, pkg, nodePackageManager(dir)),
+    layout: detectLayout(dir, pkg, nodePackageManager(dir, pkg), tracked),
     release: detectRelease(pkg),
-    ci: detectCi(dir),
+    ci: detectCi(dir, ownCommands(dir, Object.values(commands))),
     contributing: detectContributing(dir),
     conventions: detectConventions(dir, pkg),
     secrets: detectSecrets(dir),

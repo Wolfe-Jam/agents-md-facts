@@ -15,7 +15,7 @@ Hand-written agent files **rot**. LLM-written ones often **bloat** and can *redu
 ```bash
 npx agents-md-facts            # author/refresh AGENTS.md (non-destructive; skip write if facts unchanged)
 npx agents-md-facts --check    # exit 1 if missing or stale
-npx agents-md-facts --dry-run  # print plan; write nothing
+npx agents-md-facts --dry-run  # print the block it would write; write nothing
 npx agents-md-facts --stdout   # emit managed block to stdout
 ```
 
@@ -23,13 +23,15 @@ Refresh only the block between:
 
 `<!-- agents:from-facts:start -->` … `<!-- agents:from-facts:end -->`
 
-Everything you write outside those markers is preserved. Keep the markers when you edit or merge the file: a refresh finds its block by them.
+Everything you write outside those markers is preserved. Keep the markers when you edit or merge the file, each on a line of its own: a refresh finds its block by them, and a marker quoted inside a sentence is just text. A file without the markers gets the block added on top; it is replaced only when it is exactly this tool's output.
+
+It reads your manifests and config files and, in a git repo, the list of files git tracks. If git can't read the repo (for example "dubious ownership" in a container), it stops and says so rather than guess.
 
 ## What it authors
 
-Description and orientation (language, kind, Node version) · setup & build · tests · before a release (the `prepublishOnly` chain) · CI (what your workflows run) · where things live (folders and entry points) · conventions · guardrails · definition of done · security (if secrets files exist) · commit & PR (with a pointer to your contributing guide).
+Description and orientation (language, kind, Node version) · setup & build · tests · before a release (what `npm publish` runs first: `prepublishOnly`, `prepack`) · CI (the GitHub Actions workflows that check pull requests and pushes, main check first, with the repo's own commands each one runs and a count of the other steps; other workflows named) · where things live (folders and the scripts that use them, entry points as the manifest declares them, and key files) · conventions · guardrails · definition of done · security (if secrets files exist) · commit & PR (with a pointer to your contributing guide).
 
-Each section appears only when the repo has something for it.
+Guardrails and Definition of Done always appear; every other section only when the repo has something for it.
 
 Every line is a **detected fact** or a **curated default**. If it resolves no ambiguity, it is dropped.
 
@@ -43,10 +45,17 @@ Fail the build when `AGENTS.md` drifts from the repo:
 
 ```yaml
 # .github/workflows/agents-md.yml
-- uses: Wolfe-Jam/agents-md-facts@v0.1.0
+name: AGENTS.md
+on: [push, pull_request]
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: Wolfe-Jam/agents-md-facts@v0.1.0
 ```
 
-Or: `npx agents-md-facts --check`.
+The tag pins the tool: `@v0.1.0` runs agents-md-facts 0.1.0. Or: `npx agents-md-facts --check`.
 
 ## Pre-commit hook
 
@@ -61,7 +70,7 @@ repos:
       - id: agents-md-facts
 ```
 
-Then: `pre-commit install`.
+Then: `pre-commit install`. Pin `rev` to a release tag: the hook runs that release's published package with `npx`, so it needs Node and a network connection.
 
 ## Ladder
 

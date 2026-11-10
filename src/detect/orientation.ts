@@ -1,6 +1,7 @@
 import { existsSync } from 'fs';
 import { join } from 'path';
 import { readPackageJson, type PackageJson } from './pkg.js';
+import { nodePackageManager } from './commands.js';
 
 /** Detect the primary language of a project. Pure. */
 export function detectLanguage(dir: string): string {
@@ -37,13 +38,15 @@ export function detectRuntime(dir: string): string {
   return 'Unknown';
 }
 
-/** Detect the package manager from lockfiles / manifests. Pure. */
+/**
+ * Detect the package manager. A Node repo uses the same rule as its commands
+ * (`packageManager` field, then lockfile); Dart's `pub` only when there is no
+ * package.json. Pure.
+ */
 export function detectPackageManager(dir: string): string {
+  const pkg = readPackageJson(dir);
+  if (pkg) return nodePackageManager(dir, pkg);
   if (existsSync(join(dir, 'pubspec.yaml'))) return 'pub';
-  if (existsSync(join(dir, 'bun.lockb')) || existsSync(join(dir, 'bun.lock'))) return 'bun';
-  if (existsSync(join(dir, 'pnpm-lock.yaml'))) return 'pnpm';
-  if (existsSync(join(dir, 'yarn.lock'))) return 'yarn';
-  if (existsSync(join(dir, 'package-lock.json'))) return 'npm';
   return 'npm';
 }
 

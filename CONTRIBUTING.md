@@ -14,12 +14,23 @@ research is clear that padding an instruction file *hurts* agent task-success.
 When you add a detector or a section, ask: does this line tell an agent
 something it could not cheaply learn itself? If not, drop it.
 
-Two rules that follow from the filter:
+Rules that follow from the filter:
+
+- **Nothing a release offered is taken away.** A new version adds to what
+  the last one authored. Removing a section, a language or a capability is a
+  discussion first, never a side effect of a refactor.
+- **Declared, not judged.** A line is read straight from a declared field
+  (a script name, a manifest entry, a workflow trigger). Deciding what a
+  command does (is it an install, a publish, a build of that file?) is out:
+  an omission is never a false line.
 
 - **Facts, not opinions.** A section is emitted only when detection produces
   content for it. No "detected nothing, so here's a plausible default" filler.
+- **Rust and Go stay.** Cargo and Go support (their commands, and the
+  `src/main.rs` / `src/lib.rs` / `main.go` defaults) is not removed or cut
+  back without a discussion first, even when an edge case is hard.
 - **Point, don't restate.** For toolchain-governed conventions, point at the
-  config ("obey `tsconfig.json`") instead of copying its rules into prose.
+  config (`tsconfig.json`, `.eslintrc`) instead of copying its rules into prose.
 
 ## Develop
 

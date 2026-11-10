@@ -5,20 +5,32 @@ to [Semantic Versioning](https://semver.org/).
 
 ## Unreleased
 
-- Default author **skips the write** when facts are unchanged (timestamp ignored). A no-op re-run does not dirty git.
+Everything 0.1.0 authored is still authored (setup & build, tests, where things live with its key files, conventions, guardrails, definition of done, security & secrets, commit & PR); 0.2.0 adds to it. Detection reads what the repo declares (its scripts, manifests, workflows, folders and guides) and never judges what a command does.
 
-From agent runs on two real repos, where an agent reading the authored file
-missed facts the repo already stated:
+New sections and facts:
 
-- **Before a release:** the `prepublishOnly` chain (or `prepack`, `prepublish`, a `release` script), verbatim.
-- **CI:** each GitHub Actions workflow's runners, versions and `run:` steps, with `if:` conditions; installs left out.
-- **Contributing guide:** Commit & PR points to `CONTRIBUTING.md` and lists its headings; the rules stay in the guide.
-- **Description:** package.json `description` under the title.
-- **Command spelling:** `npm test` / `npm start`; `pnpm` and `yarn` repos use their own runner (`bun run test` stays).
-- **Where things live:** the top-level folders git tracks, each with what the repo says it is (a wrangler `main`, the scripts that use it, or the folder's usual meaning), then the entry points from `bin` / `exports` / `main`, traced to source. Config files are no longer listed.
-- **Node version:** `engines.node` on the orientation line.
-- **Renamed scripts:** scripts are picked by role, so `compile`/`bundle` count as the build, and `test:*`, `format:check`, `type-check` are verify commands.
-- **The banner says to keep the start/end markers,** so a merged file can still be refreshed.
+- **Description:** package.json `description` under the title. **Node version:** `engines.node` on the orientation line.
+- **Before a release:** what `npm publish` runs first (`prepublishOnly`, then `prepack`), or the `release` script, verbatim.
+- **CI:** the GitHub Actions workflows that run on pull requests and pushes, each job's `if:`, runners and matrix, and the lines in it that call the repo's own scripts or listed commands (`npm test`, `pnpm run lint`, `cargo test`), with each step's `if:`, directory, non-bash shell and, for a multi-line script, its step name. Other steps are counted ("# 2 other steps in the file"), never copied. The main check comes first (`ci.yml`, `test.yml`, …); helpers that fix, format, label or check the changelog come last. A shared workflow is shown under the job that calls it. Tag-only pushes, pushes to main only, schedules, manual runs, `pull_request_target` bots and PRs that only run on close or label are named, not copied. Read as YAML (merge keys expanded); this adds the first runtime dependency, `yaml`.
+- **Where things live:** the top-level folders git tracks (outside git, the folders minus what the root `.gitignore` ignores), each with what the repo says it is (a wrangler `main`, a workspace that lists it, a curated gloss for `cmd/`, `e2e/`, `fixtures/`, …, and the scripts that name its path: `test/ — used by npm test`), monorepo config files, and the entry points exactly as `bin`, `exports` or `main` declare them (a declared path git doesn't track says so, with the build script), then 0.1.0's key files (manifests, entry files, docs, config) that exist and aren't already shown. With no manifest entry, Cargo's `src/main.rs` / `src/lib.rs` (unless Cargo.toml moves or turns them off, or it's a virtual workspace) and a root `main.go` that is `package main` are listed, named as defaults.
+- **Contributing:** Commit & PR points to the guide (`CONTRIBUTING.md`, `.github/` or `docs/`) and lists its headings; the rules stay in the guide.
+- **Guardrails and Commit & PR say "the default branch",** not `main`. The Definition of Done names the gate scripts (`test`, `lint`, typecheck), not `test:*` variants.
+
+How facts are read:
+
+- **Scripts by name:** `compile`/`bundle` are the build; `test:*`, `format:check`, `type-check` are checks; `:watch`, `:fix`, `:update` variants are left out. Each package manager's own spelling (`npm test`, `pnpm run x`, `bun run test`); package.json `packageManager` wins over lockfiles.
+- **Git:** the folder list comes from the files git tracks, so a local build can't change the output. If git can't read the repo (dubious ownership, even from a subfolder; git not installed), the run stops (exit 2) with git's reason and, for dubious ownership, the `safe.directory` fix. A file list of any size is read.
+- **Markers count only on a line of their own;** a marker quoted in prose is just text, and a file with two start-marker lines is not written (exit 2). A file that kept the banner but lost its markers keeps its text; it is replaced only when it is exactly this tool's output. CRLF files stay CRLF; a BOM is kept.
+- **Default author skips the write** when facts are unchanged (timestamp ignored), and `--check` reads a CRLF checkout the same as LF.
+- **CONTRIBUTING headings** follow CommonMark (fences, setext headings), skip YAML front matter, keep `C#`, lose link URLs; at most six are shown.
+- A description that starts like markup is escaped; a non-string script value doesn't throw. Token-shaped strings are masked.
+
+Integrations:
+
+- **The pre-commit hook works:** it runs `npx agents-md-facts@<this version> --check` (it failed to install before, because `dist/` isn't in git). It needs Node and network, and pre-commit 3.2.0 or later.
+- **The Action defaults to its own version,** not `latest`.
+
+**Upgrading from 0.1.0:** run `npx agents-md-facts` once. The output changed, so `--check` reports the old file as stale until you refresh it.
 
 ## 0.1.0
 

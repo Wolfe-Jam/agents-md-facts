@@ -1,5 +1,5 @@
 <!-- agents:from-facts:start -->
-<!-- authored by agents-md-facts — from your repo's facts, never guessed · re-run to refresh · keep the start/end markers · authored: 2026-11-09T21:14:00.309Z -->
+<!-- authored by agents-md-facts — from your repo's facts, never guessed · re-run to refresh · keep the start/end markers · authored: 2026-11-10T05:31:16.273Z -->
 
 # AGENTS.md — agents-md-facts
 
@@ -7,7 +7,7 @@ Honest to a fault — a minimal AGENTS.md, authored from your repo's facts, neve
 
 TypeScript · CLI · Node.js >=18 · bun package manager · v0.1.0
 
-*Authored: 2026-11-09*
+*Authored: 2026-11-10*
 
 ## Setup & build
 
@@ -27,7 +27,7 @@ bun run typecheck
 
 ## Before a release
 
-Publishing runs `prepublishOnly` first:
+`npm publish` runs `prepublishOnly` first:
 
 ```bash
 bun run build
@@ -35,26 +35,41 @@ bun run build
 
 ## CI
 
-`.github/workflows/ci.yml` · ubuntu-latest
+The repo's own commands each check runs on a change; everything else is in the workflow files.
+
+`.github/workflows/ci.yml` (on push, pull_request)
 
 ```bash
-bunx tsc --noEmit
+# job test · ubuntu-latest
 bun run lint
-bun test
-bun run src/cli.ts --check
+# 4 other steps in the file
 ```
 
 ## Where things live
 
-- `docs/` — docs
-- `examples/` — examples
-- `src/` — source, used by `bun run dev`, `bun run lint`
-- `tests/` — tests
+- `docs/`
+- `examples/`
+- `src/` — used by `bun run dev`
+- `tests/`
 
 Entry points:
 
-- `src/cli.ts` — the `agents-md-facts` command
-- `src/index.ts` — library entry
+- `dist/cli.js` — the `agents-md-facts` command (not in git; the build script is `bun run build`)
+- `dist/index.js` — package entry (`exports`) (not in git; the build script is `bun run build`)
+
+Key files:
+
+- `package.json`
+- `src/index.ts`
+- `src/cli.ts`
+- `src/detect/`
+- `src/author.ts`
+- `src/context.ts`
+- `src/inject.ts`
+- `README.md`
+- `CHANGELOG.md`
+- `tsconfig.json`
+- `eslint.config.js`
 
 ## Conventions
 
@@ -66,7 +81,7 @@ Entry points:
 
 - **Always OK:** read files, run the tests (`bun run test`), build the project.
 - **Ask first:** dependency installs, deletions, migrations / schema changes.
-- **Never:** force-push, push to `main`, commit secrets.
+- **Never:** force-push, push to the default branch, commit secrets.
 
 ## Definition of Done
 
@@ -76,6 +91,6 @@ Done when: `bun run lint` exits 0 · `bun run typecheck` exits 0 · `bun run tes
 
 - Follow `CONTRIBUTING.md` (The governing filter · Develop · Test · Build · License).
 - Write a clear, descriptive commit message.
-- Branch off `main`; never commit to `main` directly — open a PR for review.
+- Branch off the default branch; never commit to it directly — open a PR for review.
 - If build/test scripts or layout change, refresh this file in the **same PR** (`npx agents-md-facts`).
 <!-- agents:from-facts:end -->

@@ -33,12 +33,12 @@ describe('A1 — the release gate', () => {
   test('prepublishOnly is shown verbatim, as what publishing runs', () => {
     const md = author(repo({ 'package.json': pkg({ scripts: { test: 'node --test', prepublishOnly: 'npm run build && npm test && npm run smoke' } }) }));
     expect(md).toContain('## Before a release');
-    expect(md).toContain('Publishing runs `prepublishOnly` first:');
+    expect(md).toContain('`npm publish` runs `prepublishOnly` first:');
     expect(md).toContain('npm run build && npm test && npm run smoke');
   });
   test('a `release` script is shown with its run command', () => {
     const md = author(repo({ 'package.json': pkg({ scripts: { release: 'changeset publish' } }) }));
-    expect(md).toContain('`npm run release` runs:');
+    expect(md).toContain('The `release` script runs:');
     expect(md).toContain('changeset publish');
   });
   test('no release script → no section', () => {
@@ -68,25 +68,37 @@ jobs:
           npm run build:validator
           git diff --exit-code -- worker/validator.cjs
 `;
-  test('runners, versions and steps; installs left out; conditions kept', () => {
+  test('runners, versions and each step\'s commands; conditions kept', () => {
     expect(parseWorkflow(WF)).toEqual({
-      on: ['ubuntu-latest', 'windows-latest', 'Node 22, 24'],
-      steps: [
-        { run: 'npm test' },
-        { run: 'npm run coverage:checks', if: "matrix.os == 'ubuntu-latest'" },
-        { run: 'npm run build:validator\ngit diff --exit-code -- worker/validator.cjs' },
-      ],
+      on: ['push'],
+      checksChanges: true,
+      jobs: [{
+        id: 'verify',
+        runsOn: ['ubuntu-latest', 'windows-latest'],
+        matrix: ['node 22, 24'],
+        steps: [
+          { commands: ['npm ci'] },
+          { commands: ['npm test'] },
+          { commands: ['npm run coverage:checks'], if: "matrix.os == 'ubuntu-latest'" },
+          { commands: ['npm run build:validator', 'git diff --exit-code -- worker/validator.cjs'], name: 'Drift' },
+        ],
+        other: 0,
+      }],
     });
   });
-  test('the CI section names the workflow file and its commands', () => {
-    const md = author(repo({ 'package.json': pkg({}), '.github/workflows/ci.yml': WF }));
-    expect(md).toContain('`.github/workflows/ci.yml` · ubuntu-latest · windows-latest · Node 22, 24');
-    expect(md).toContain("# if: matrix.os == 'ubuntu-latest'\nnpm run coverage:checks");
+  test('the CI section names the workflow file and the repo commands it runs, nothing else', () => {
+    const scripts = { test: 'node --test', 'coverage:checks': 'c8', 'build:validator': 'node b.mjs' };
+    const md = author(repo({ 'package.json': pkg({ scripts }), '.github/workflows/ci.yml': WF }));
+    expect(md).toContain('`.github/workflows/ci.yml` (on push)');
+    expect(md).toContain('# job verify · ubuntu-latest, windows-latest · node 22, 24\nnpm test\n');
+    expect(md).toContain("# if: matrix.os == 'ubuntu-latest'\nnpm run coverage:checks\n# step \"Drift\"\nnpm run build:validator\n# 1 other step in the file");
     expect(md).not.toContain('npm ci');
+    expect(md).not.toContain('git diff');
   });
-  test('a workflow that only uses actions adds nothing', () => {
+  test('a workflow that only uses actions is named, not copied', () => {
     const md = author(repo({ 'package.json': pkg({}), '.github/workflows/pages.yml': 'jobs:\n  a:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/deploy-pages@v4\n' }));
-    expect(md).not.toContain('## CI');
+    expect(md).toContain('Also: `.github/workflows/pages.yml`.');
+    expect(md).not.toContain('# job');
   });
 });
 
@@ -132,12 +144,12 @@ describe('A5 — the repo\'s own command spelling', () => {
 });
 
 describe('A6 — where things live', () => {
-  test('top-level folders with what the repo says they are; entry points traced to source', () => {
+  test('top-level folders with what the repo says they are; entry points as declared', () => {
     const dir = repo({
       'package.json': pkg({
         bin: { 'card-check': 'dist/cli.js', 'mcp-card-check': 'dist/cli.js' },
         exports: { '.': { types: './dist/lib.d.ts', default: './dist/lib.js' } },
-        scripts: { test: 'node --test "test/*.test.ts"', smoke: 'node scripts/smoke.mjs', typecheck: 'tsc --noEmit -p worker' },
+        scripts: { build: 'tsc', test: 'node --test "test/*.test.ts"', smoke: 'node scripts/smoke.mjs', typecheck: 'tsc --noEmit -p worker' },
       }),
       'wrangler.jsonc': '{ "name": "x", "main": "worker/index.ts" }',
       'src/cli.ts': '', 'src/lib.ts': '', 'test/a.test.ts': '', 'scripts/smoke.mjs': '',
@@ -145,17 +157,18 @@ describe('A6 — where things live', () => {
     });
     const md = author(dir);
     expect(md).toContain('- `schema/`\n');
-    expect(md).toContain('- `scripts/` — scripts, used by `npm run smoke`');
-    expect(md).toContain('- `test/` — tests, used by `npm test`');
-    expect(md).toContain('- `worker/` — Cloudflare Worker (`wrangler.jsonc` main: `worker/index.ts`), used by `npm run typecheck`');
-    expect(md).toContain('- `src/cli.ts` — the `card-check` and `mcp-card-check` commands');
-    expect(md).toContain('- `src/lib.ts` — library entry');
+    expect(md).toContain('- `scripts/` — used by `npm run smoke`');
+    expect(md).toContain('- `test/` — used by `npm test`');
+    // `-p worker` is a bare word, not a path: no "used by" claim from it.
+    expect(md).toContain('- `worker/` — Cloudflare Worker (`wrangler.jsonc` main: `worker/index.ts`)\n');
+    expect(md).toContain('- `dist/cli.js` — the `card-check` and `mcp-card-check` commands');
+    expect(md).toContain('- `dist/lib.js` — package entry (`exports`)');
     expect(md).not.toContain('`dist/`');
     expect(md).not.toContain('node_modules');
   });
-  test('no manifest entry → the conventional entry files that exist', () => {
+  test('no manifest entry → the toolchain\'s own default, named as such', () => {
     const md = author(repo({ 'Cargo.toml': '[package]\nname = "x"\n', 'src/main.rs': '' }));
-    expect(md).toContain('Entry points:\n\n- `src/main.rs`');
+    expect(md).toContain('Entry points:\n\n- `src/main.rs` — binary crate root (Cargo default)');
   });
 });
 

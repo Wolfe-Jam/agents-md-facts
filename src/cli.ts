@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 import { join } from 'path';
 import { authorAgentsMd } from './author.js';
-import { buildRepoContext } from './context.js';
-import { extractBlock, injectBlock, wrapBlock } from './inject.js';
+import { buildRepoContext, type RepoContext } from './context.js';
+import { GitUnreadableError } from './detect/git.js';
+import { extractBlock, injectBlock, MarkerError, wrapBlock } from './inject.js';
 import { stripVolatile } from './volatile.js';
 
 const HELP = `agents-md-facts — author a minimal AGENTS.md from your repo's facts.
@@ -27,7 +28,7 @@ function main(): void {
 
   const dir = process.cwd();
   const target = join(dir, 'AGENTS.md');
-  const ctx = buildRepoContext(dir);
+  const ctx: RepoContext = buildRepoContext(dir);
   const block = authorAgentsMd(ctx);
 
   // --check: fail if missing or drifted from repo facts.
@@ -59,8 +60,23 @@ function main(): void {
     process.stderr.write('AGENTS.md already matches facts — write skipped.\n');
     return;
   }
-  injectBlock(target, block);
+  const result = injectBlock(target, block);
+  if (result === 'kept') {
+    process.stderr.write(
+      'AGENTS.md had this tool\'s banner but no start/end markers, and text that may be yours. ' +
+      'The new block is at the top; nothing was removed. Delete the old copy below it when you\'ve kept what you need.\n',
+    );
+  }
   process.stderr.write(`AGENTS.md authored from facts → ${target}\n`);
 }
 
-main();
+try {
+  main();
+} catch (e) {
+  // Git that won't read the repo, or a file with two start markers: stop, write nothing, say why.
+  if (e instanceof GitUnreadableError || e instanceof MarkerError) {
+    process.stderr.write(`${e.message}\n`);
+    process.exit(2);
+  }
+  throw e;
+}

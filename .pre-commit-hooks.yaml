@@ -3,7 +3,7 @@
   description: Fail the commit when AGENTS.md no longer matches the repo's facts
   # Runs the published package (dist/ is not in git). Needs Node and network.
   # The version is set at each release, to match the tag your `rev` names.
-  entry: npx --yes agents-md-facts@0.1.0 --check
+  entry: npx --yes agents-md-facts@0.2.0 --check
   language: system
   pass_filenames: false
   always_run: true

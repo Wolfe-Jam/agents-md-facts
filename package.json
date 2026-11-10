@@ -1,6 +1,6 @@
 {
   "name": "agents-md-facts",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Honest to a fault — a minimal AGENTS.md, authored from your repo's facts, never guessed.",
   "type": "module",
   "bin": {

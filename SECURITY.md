@@ -13,7 +13,7 @@ Security fixes are applied to the **latest published release** on npm (`agents-m
 
 **Please do not open a public GitHub issue for security reports.**
 
-Email **security@faf.one** (or the maintainer listed on npm) with:
+Email **team@faf.one** (or the maintainer listed on npm) with:
 
 - A description of the issue
 - Steps to reproduce

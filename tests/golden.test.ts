@@ -42,7 +42,8 @@ describe('golden fixtures', () => {
 
     test(`${name} — committed file is exactly the wrapped block`, () => {
       const block = authorAgentsMd(buildRepoContext(dir));
-      expect(stripVolatile(readFileSync(goldenPath, 'utf-8'))).toBe(stripVolatile(`${wrapBlock(block)}\n`));
+      // A Windows checkout (core.autocrlf) has CRLF line ends; the tool reads it the same as LF.
+      expect(stripVolatile(readFileSync(goldenPath, 'utf-8').replace(/\r\n/g, '\n'))).toBe(stripVolatile(`${wrapBlock(block)}\n`));
     });
 
     test(`${name} — output is deterministic across two runs`, () => {

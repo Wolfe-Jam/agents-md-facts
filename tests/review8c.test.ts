@@ -113,14 +113,16 @@ describe('N1 / K5 — git: big repos, subfolders, git missing', () => {
     expect(tracked?.files.size).toBe(12001);
   }, 120_000);
 
-  test('dubious ownership seen from a subfolder (no .git in it) stops the run', () => {
+  // A shell-script stand-in for git can't run on Windows.
+  test.skipIf(process.platform === 'win32')('dubious ownership seen from a subfolder (no .git in it) stops the run', () => {
     const dir = repo({ 'pkg/package.json': pkg({}) });
     const r = cliWithGit(join(dir, 'pkg'), `echo "fatal: detected dubious ownership in repository at '${dir}'" >&2; exit 128`);
     expect(r.status).toBe(2);
     expect(r.stderr).toContain('safe.directory');
   });
 
-  test('git not installed with a .git present: says so, no safe.directory hint', () => {
+  // A shell-script stand-in for git can't run on Windows.
+  test.skipIf(process.platform === 'win32')('git not installed with a .git present: says so, no safe.directory hint', () => {
     const dir = repo({ 'package.json': pkg({}), '.git/HEAD': 'ref: refs/heads/main\n' });
     const r = cliWithGit(dir, null);
     expect(r.status).toBe(2);
@@ -268,5 +270,15 @@ describe('ladder 11-10: a CI note stays with its step; a step is shown whole', (
       '.github/workflows/ci.yml': "on: pull_request\njobs:\n  verify:\n    runs-on: ubuntu-latest\n    steps:\n      - run: npm test\n      - if: matrix.node == '24'\n        run: npm run coverage:checks\n      - run: npm run build\n      - run: npm run build:validator && git diff --exit-code -- worker/validator.cjs\n",
     }));
     expect(md).toContain("npm test\nnpm run coverage:checks    # if: matrix.node == '24'\nnpm run build\nnpm run build:validator && git diff --exit-code -- worker/validator.cjs\n");
+  });
+});
+
+describe('runtime as the repo declares it', () => {
+  test('bunfig.toml with engines.node is Node.js (Bun is the tooling); engines.bun alone is Bun; bunfig.toml alone is Bun', () => {
+    expect(author(repo({ 'package.json': pkg({ engines: { node: '>=22' } }), 'bunfig.toml': '', 'bun.lock': '' })))
+      .toContain('JavaScript · Node.js >=22 · bun package manager');
+    expect(author(repo({ 'package.json': pkg({ engines: { bun: '>=1.1' } }), 'bun.lock': '' })))
+      .toContain('JavaScript · Bun · bun package manager');
+    expect(author(repo({ 'bunfig.toml': '' }))).toMatch(/^Bun$/m);
   });
 });

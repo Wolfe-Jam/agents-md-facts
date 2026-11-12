@@ -3,6 +3,12 @@
 All notable changes to this project are documented here. This project adheres
 to [Semantic Versioning](https://semver.org/).
 
+## Unreleased
+
+- **`--version`** prints the version.
+- **An unknown option stops the run** (exit 2) and writes nothing. Before, it was ignored and the default run wrote AGENTS.md, so `--chek` in CI rewrote the file and passed.
+- **Python title and version:** with no package.json, the block's title and version come from `pyproject.toml` (`[project]`, then `[tool.poetry]`), not the folder name. A version listed in `dynamic` isn't shown.
+
 ## 0.2.0 (2026-11-10)
 
 Everything 0.1.0 authored is still authored (setup & build, tests, where things live with its key files, conventions, guardrails, definition of done, security & secrets, commit & PR); 0.2.0 adds to it. Detection reads what the repo declares (its scripts, manifests, workflows, folders and guides) and never judges what a command does.

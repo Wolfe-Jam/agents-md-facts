@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { readFileSync } from 'fs';
 import { join } from 'path';
 import { authorAgentsMd } from './author.js';
 import { buildRepoContext, type RepoContext } from './context.js';
@@ -15,7 +16,17 @@ Usage: agents-md-facts [options]
   --dry-run    print what would be written; write nothing
   --stdout     print the managed block to stdout; write nothing
   -h, --help   show this help
+  --version    print the version
 `;
+
+/** The options this CLI knows. Anything else stops the run (exit 2) before anything is written. */
+const KNOWN = new Set(['--check', '--dry-run', '--stdout', '-h', '--help', '--version']);
+
+/** The version from this package's own package.json (one folder up from src/ and dist/). */
+function version(): string {
+  const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')) as { version?: unknown };
+  return typeof pkg.version === 'string' ? pkg.version : 'unknown';
+}
 
 function main(): void {
   const args = process.argv.slice(2);
@@ -24,6 +35,16 @@ function main(): void {
   if (has('-h') || has('--help')) {
     process.stdout.write(HELP);
     return;
+  }
+  if (has('--version')) {
+    process.stdout.write(`${version()}\n`);
+    return;
+  }
+  // An unknown option (a typo like --chek) must not fall through to the default write.
+  const unknown = args.filter((a) => !KNOWN.has(a));
+  if (unknown.length) {
+    process.stderr.write(`Unknown option: ${unknown.join(' ')} — nothing written. Run agents-md-facts --help for the options.\n`);
+    process.exit(2);
   }
 
   const dir = process.cwd();

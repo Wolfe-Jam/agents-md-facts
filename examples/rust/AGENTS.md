@@ -1,11 +1,11 @@
 <!-- agents:from-facts:start -->
-<!-- authored by agents-md-facts — from your repo's facts, never guessed · re-run to refresh · keep the start/end markers · authored: 2026-11-10T14:16:28.757Z -->
+<!-- authored by agents-md-facts — from your repo's facts, never guessed · re-run to refresh · keep the start/end markers · authored: 2026-11-12T13:06:58.304Z -->
 
-# AGENTS.md — rust
+# AGENTS.md — rust-example
 
-Rust
+Rust · v0.1.0
 
-*Authored: 2026-11-10*
+*Authored: 2026-11-12*
 
 ## Setup & build
 

@@ -20,11 +20,11 @@ import { detectKind, detectLanguage, detectPackageManager, detectRuntime } from 
 export interface RepoContext {
   /** Absolute path scanned. */
   dir: string;
-  /** package.json name, else pyproject.toml's, else the directory basename. */
+  /** package.json name, else pyproject.toml's, else Cargo.toml's, else the directory basename. */
   name: string;
   /** package.json `description`, verbatim on one line, else null. */
   description?: string | null;
-  /** package.json version, else pyproject.toml's (when not dynamic), else null. */
+  /** package.json version, else pyproject.toml's (when not dynamic), else Cargo.toml's, else null. */
   version: string | null;
   /** package.json `engines.node` (the Node versions it needs), else null. */
   nodeVersion?: string | null;
@@ -62,41 +62,59 @@ export interface RepoContext {
  * Run the detectors over a directory and collect their results into a plain
  * RepoContext. No merging, no external config, no interpretation — just facts.
  */
+/** A `key = "value"` string inside one TOML table (up to the next `[` line), else null. */
+function tomlTable(text: string, table: string): ((key: string) => string | null) | null {
+  const start = text.search(new RegExp(`^\\[${table.replace(/\./g, '\\.')}\\]\\s*$`, 'm'));
+  if (start === -1) return null;
+  const body: string[] = [];
+  for (const line of text.slice(start).split(/\r?\n/).slice(1)) {
+    if (/^\s*\[/.test(line)) break;
+    body.push(line);
+  }
+  const joined = body.join('\n');
+  return (key) => new RegExp(`^\\s*${key}\\s*=\\s*["']([^"'\\n]+)["']`, 'm').exec(joined)?.[1]?.trim() || null;
+}
+
+const readText = (file: string): string => (existsSync(file) ? readFileSync(file, 'utf8') : '');
+
 /**
  * `name` and `version` as pyproject.toml declares them: `[project]` first, then
  * `[tool.poetry]`. A version listed in `dynamic` has no value to read, so it's left out.
  */
 export function pyprojectMeta(dir: string): { name: string | null; version: string | null } {
-  const file = join(dir, 'pyproject.toml');
-  const text = existsSync(file) ? readFileSync(file, 'utf8') : '';
+  const text = readText(join(dir, 'pyproject.toml'));
   for (const table of ['project', 'tool.poetry']) {
-    const start = text.search(new RegExp(`^\\[${table.replace(/\./g, '\\.')}\\]\\s*$`, 'm'));
-    if (start === -1) continue;
-    const body: string[] = [];
-    for (const line of text.slice(start).split(/\r?\n/).slice(1)) {
-      if (/^\s*\[/.test(line)) break;
-      body.push(line);
-    }
-    const value = (key: string): string | null =>
-      new RegExp(`^\\s*${key}\\s*=\\s*["']([^"'\\n]+)["']`, 'm').exec(body.join('\n'))?.[1]?.trim() || null;
-    const name = value('name');
-    if (name) return { name, version: value('version') };
+    const value = tomlTable(text, table);
+    const name = value?.('name');
+    if (value && name) return { name, version: value('version') };
   }
   return { name: null, version: null };
 }
 
+/**
+ * `name` and `version` from Cargo.toml's `[package]`. A virtual workspace has no
+ * `[package]`, and `version.workspace = true` has no literal version: both read as null.
+ */
+export function cargoMeta(dir: string): { name: string | null; version: string | null } {
+  const value = tomlTable(readText(join(dir, 'Cargo.toml')), 'package');
+  const name = value?.('name') ?? null;
+  return value && name ? { name, version: value('version') } : { name: null, version: null };
+}
+
 export function buildRepoContext(dir: string): RepoContext {
   const pkg = readPackageJson(dir);
-  const py = pkg ? { name: null, version: null } : pyprojectMeta(dir);
+  const none = { name: null, version: null };
+  const py = pkg ? none : pyprojectMeta(dir);
+  const crate = pkg || py.name ? none : cargoMeta(dir);
   // One read of git: whether this is a work tree, and what it tracks (throws when git refuses).
   const tracked = gitFiles(dir);
 
   const commands = detectCommands(dir, pkg);
   return {
     dir,
-    name: pkg?.name ?? py.name ?? basename(dir),
+    name: pkg?.name ?? py.name ?? crate.name ?? basename(dir),
     description: typeof pkg?.description === 'string' && pkg.description.trim() ? pkg.description.trim().replace(/\s+/g, ' ') : null,
-    version: typeof pkg?.version === 'string' && pkg.version.trim() ? pkg.version.trim() : py.version,
+    version: typeof pkg?.version === 'string' && pkg.version.trim() ? pkg.version.trim() : py.version ?? crate.version,
     nodeVersion: typeof pkg?.engines?.node === 'string' && pkg.engines.node.trim() ? pkg.engines.node.trim() : null,
     language: detectLanguage(dir),
     runtime: detectRuntime(dir),

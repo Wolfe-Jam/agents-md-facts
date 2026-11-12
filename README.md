@@ -17,7 +17,10 @@ npx agents-md-facts            # author/refresh AGENTS.md (non-destructive; skip
 npx agents-md-facts --check    # exit 1 if missing or stale
 npx agents-md-facts --dry-run  # print the block it would write; write nothing
 npx agents-md-facts --stdout   # emit managed block to stdout
+npx agents-md-facts --version  # print the version
 ```
+
+An option it doesn't know stops the run with exit 2 and writes nothing, so a typo like `--chek` in CI fails instead of rewriting the file.
 
 Refresh only the block between:
 

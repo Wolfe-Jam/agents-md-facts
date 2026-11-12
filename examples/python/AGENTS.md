@@ -1,11 +1,11 @@
 <!-- agents:from-facts:start -->
-<!-- authored by agents-md-facts — from your repo's facts, never guessed · re-run to refresh · keep the start/end markers · authored: 2026-11-10T14:16:28.548Z -->
+<!-- authored by agents-md-facts — from your repo's facts, never guessed · re-run to refresh · keep the start/end markers · authored: 2026-11-12T06:36:11.674Z -->
 
-# AGENTS.md — python
+# AGENTS.md — python-example
 
-Python
+Python · v0.1.0
 
-*Authored: 2026-11-10*
+*Authored: 2026-11-12*
 
 ## Run the tests
 

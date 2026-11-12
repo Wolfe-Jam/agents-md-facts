@@ -1,4 +1,5 @@
-import { basename } from 'path';
+import { existsSync, readFileSync } from 'fs';
+import { basename, join } from 'path';
 import { readPackageJson } from './detect/pkg.js';
 import { detectCommands, nodePackageManager } from './detect/commands.js';
 import { detectRelease, type DetectedRelease } from './detect/release.js';
@@ -19,11 +20,11 @@ import { detectKind, detectLanguage, detectPackageManager, detectRuntime } from 
 export interface RepoContext {
   /** Absolute path scanned. */
   dir: string;
-  /** package.json name, else the directory basename. */
+  /** package.json name, else pyproject.toml's, else the directory basename. */
   name: string;
   /** package.json `description`, verbatim on one line, else null. */
   description?: string | null;
-  /** package.json / Cargo-style version when declared, else null. */
+  /** package.json version, else pyproject.toml's (when not dynamic), else null. */
   version: string | null;
   /** package.json `engines.node` (the Node versions it needs), else null. */
   nodeVersion?: string | null;
@@ -61,17 +62,41 @@ export interface RepoContext {
  * Run the detectors over a directory and collect their results into a plain
  * RepoContext. No merging, no external config, no interpretation — just facts.
  */
+/**
+ * `name` and `version` as pyproject.toml declares them: `[project]` first, then
+ * `[tool.poetry]`. A version listed in `dynamic` has no value to read, so it's left out.
+ */
+export function pyprojectMeta(dir: string): { name: string | null; version: string | null } {
+  const file = join(dir, 'pyproject.toml');
+  const text = existsSync(file) ? readFileSync(file, 'utf8') : '';
+  for (const table of ['project', 'tool.poetry']) {
+    const start = text.search(new RegExp(`^\\[${table.replace(/\./g, '\\.')}\\]\\s*$`, 'm'));
+    if (start === -1) continue;
+    const body: string[] = [];
+    for (const line of text.slice(start).split(/\r?\n/).slice(1)) {
+      if (/^\s*\[/.test(line)) break;
+      body.push(line);
+    }
+    const value = (key: string): string | null =>
+      new RegExp(`^\\s*${key}\\s*=\\s*["']([^"'\\n]+)["']`, 'm').exec(body.join('\n'))?.[1]?.trim() || null;
+    const name = value('name');
+    if (name) return { name, version: value('version') };
+  }
+  return { name: null, version: null };
+}
+
 export function buildRepoContext(dir: string): RepoContext {
   const pkg = readPackageJson(dir);
+  const py = pkg ? { name: null, version: null } : pyprojectMeta(dir);
   // One read of git: whether this is a work tree, and what it tracks (throws when git refuses).
   const tracked = gitFiles(dir);
 
   const commands = detectCommands(dir, pkg);
   return {
     dir,
-    name: pkg?.name ?? basename(dir),
+    name: pkg?.name ?? py.name ?? basename(dir),
     description: typeof pkg?.description === 'string' && pkg.description.trim() ? pkg.description.trim().replace(/\s+/g, ' ') : null,
-    version: typeof pkg?.version === 'string' && pkg.version.trim() ? pkg.version.trim() : null,
+    version: typeof pkg?.version === 'string' && pkg.version.trim() ? pkg.version.trim() : py.version,
     nodeVersion: typeof pkg?.engines?.node === 'string' && pkg.engines.node.trim() ? pkg.engines.node.trim() : null,
     language: detectLanguage(dir),
     runtime: detectRuntime(dir),

@@ -3,7 +3,7 @@
 All notable changes to this project are documented here. This project adheres
 to [Semantic Versioning](https://semver.org/).
 
-## Unreleased
+## 0.2.1 (2026-11-12)
 
 - **`--version`** prints the version.
 - **An unknown option stops the run** (exit 2) and writes nothing. Before, it was ignored and the default run wrote AGENTS.md, so `--chek` in CI rewrote the file and passed.

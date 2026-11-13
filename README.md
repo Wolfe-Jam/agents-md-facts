@@ -32,7 +32,7 @@ It reads your manifests and config files and, in a git repo, the list of files g
 
 ## What it authors
 
-Description and orientation (language, kind, Node version) · setup & build · tests · before a release (what `npm publish` runs first: `prepublishOnly`, `prepack`, or that nothing does) · CI (the GitHub Actions workflows that check pull requests and pushes, main check first, with each step that runs the repo's scripts or toolchain and a count of the other steps; other workflows named; or that there are none) · where things live (folders and the scripts that use them, entry points as `package.json` or `pyproject.toml` declares them, and key files) · conventions · guardrails · definition of done · security (if secrets files exist) · commit & PR (with a pointer to your contributing guide).
+Title and version (from `package.json`, `pyproject.toml` or `Cargo.toml`, else the folder name) · description and orientation (language, kind, Node version) · setup & build · tests · before a release (what `npm publish` runs first: `prepublishOnly`, `prepack`, or that nothing does) · CI (the GitHub Actions workflows that check pull requests and pushes, main check first, with each step that runs the repo's scripts or toolchain and a count of the other steps; other workflows named; or that there are none) · where things live (folders and the scripts that use them, entry points as `package.json` or `pyproject.toml` declares them, and key files) · conventions · guardrails · definition of done · security (if secrets files exist) · commit & PR (with a pointer to your contributing guide).
 
 Guardrails and Definition of Done always appear; every other section only when the repo has something for it.
 
@@ -55,20 +55,20 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
-      - uses: Wolfe-Jam/agents-md-facts@v0.2.1
+      - uses: Wolfe-Jam/agents-md-facts@v0.2.2
 ```
 
-The tag pins the tool: `@v0.2.1` runs agents-md-facts 0.2.1. Or: `npx agents-md-facts --check`.
+The tag pins the tool: `@v0.2.2` runs agents-md-facts 0.2.2. Or: `npx agents-md-facts --check`.
 
 ## Pre-commit hook
 
-Catch stale `AGENTS.md` before it lands. The hook runs `npx agents-md-facts@0.2.1 --check`, so it needs Node and network.
+Catch stale `AGENTS.md` before it lands. The hook runs `npx agents-md-facts@0.2.2 --check`, so it needs Node and network.
 
 ```yaml
 # .pre-commit-config.yaml
 repos:
   - repo: https://github.com/Wolfe-Jam/agents-md-facts
-    rev: v0.2.1
+    rev: v0.2.2
     hooks:
       - id: agents-md-facts
 ```

@@ -3,7 +3,7 @@
 All notable changes to this project are documented here. This project adheres
 to [Semantic Versioning](https://semver.org/).
 
-## Unreleased
+## 0.2.2 (2026-11-13)
 
 - **Rust title and version:** with no package.json or pyproject.toml name, the block's title and version come from `Cargo.toml`'s `[package]`, not the folder name. A virtual workspace keeps the folder name; `version.workspace = true` shows no version.
 

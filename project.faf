@@ -1,7 +1,7 @@
 faf_version: "3.0"
 project:
   name: agents-md-facts
-  version: "0.2.1"
+  version: "0.2.2"
   goal: Author a minimal AGENTS.md from the repo's facts. Never guessed.
   main_language: TypeScript
   type: cli
